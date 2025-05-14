@@ -1,5 +1,6 @@
+Dont want to pay Copilot to review your code? No problem! Because you've got:
 # Gemini PR Reviewer 🧠
-## Reviews your Pull Requests using latest Gemini Flash model with previous feedback reevaluation on update ✨
+## Reviews your Pull Requests for 🆓 using latest Gemini Flash model with previous feedback reevaluation on update ✨
 
 ### Usage:
 - Put it in `.github/workflows/` folder of your repo
