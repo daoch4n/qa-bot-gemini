@@ -13,3 +13,4 @@ Don't want to pay Copilot to review your code online? No problem! Because you've
 - Detailed review feedback will be generated on completion with `Resolve conversation` button along with AI-actionable JSON report auto-commited to your repo `/reviews/` folder in case you'd like to delegate bugfixing to another agent
 
 ### See it in action 🪄 : [https://github.com/dtub/DaokoTube](https://github.com/dtub/DaokoTube/pulls?q=is%3Apr+is%3Aclosed)
+### Inspired by https://github.com/truongnh1992/gemini-ai-code-reviewer
