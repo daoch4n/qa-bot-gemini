@@ -1,4 +1,4 @@
-Dont want to pay Copilot to review your code online? No problem! Because you've got:
+Don't want to pay Copilot to review your code online? No problem! Because you've got:
 # Gemini PR Reviewer 🧠
 ## Reviews your Pull Requests for 🆓 using latest Gemini Flash model with previous feedback reevaluation on update ✨
 
