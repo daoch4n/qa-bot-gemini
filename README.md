@@ -28,3 +28,4 @@ Differences:
 - Optimized diff parsing algoritm that work better with GitHub (maybe)
 - Uses Structured Output mode of Gemini API for better parsing of AI output
 - Rotates API keys through `GEMINI_ALT_1` >> `GEMINI_ALT_4` (dont forget to set them in repos secrets) in case your PRs are really big and active
+- Auto-commits AI-actionable JSON report to your repo /reviews/ folder for futher agentic processing
