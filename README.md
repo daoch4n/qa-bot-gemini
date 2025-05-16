@@ -27,4 +27,4 @@ Differences:
 - Loads previous comments on PR update for better context
 - Optimized diff parsing algoritm that work better with GitHub (maybe)
 - Uses Structured Output mode of Gemini API for better parsing of AI output
-- Can rotate API keys through GEMINI_ALT_1 >> GEMINI_ALT_4 in case your PRs are really big and active
+- Rotates API keys through `GEMINI_ALT_1` >> `GEMINI_ALT_4` (dont forget to set them in repos secrets) in case your PRs are really big and active
