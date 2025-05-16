@@ -11,7 +11,6 @@ Don't want to pay Copilot to review your code online? No problem! Because you've
     - Secret: the API key you just got from https://aistudio.google.com/
 - It will automatically run on every pull request creation , update and reopen
 - Detailed review feedback will be generated on completion with `Resolve conversation` button along with AI-actionable JSON report auto-commited to your repo `/reviews/` folder
-- Also uses JSON file in question to load previous comments from last run for better context
 ### (Optional) If you want it to comment as cute white robot:
 - Install https://github.com/apps/zen-ai-qa on your acc or repo
 - From repo page on Github go to `Settings` -> `Secrets and variables` -> `Actions`
@@ -24,8 +23,8 @@ Don't want to pay Copilot to review your code online? No problem! Because you've
 Differences:
 - Batches hunks related to same files to optimize rate limiting
 - Makes use of Gemini 1 million tokens context window by attaching whole file together with changes for better context
-- Loads previous comments on PR update for better context
 - Optimized diff parsing algoritm that work better with GitHub (maybe)
 - Uses Structured Output mode of Gemini API for better parsing of AI output
 - Rotates API keys through `GEMINI_ALT_1` >> `GEMINI_ALT_4` (dont forget to set them in repos secrets) in case your PRs are really big and active
 - Auto-commits AI-actionable JSON report to your repo /reviews/ folder for futher agentic processing
+- Uses JSON file in question during PR update run to load previous comments from last run for better context
