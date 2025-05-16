@@ -14,8 +14,8 @@ Don't want to pay Copilot to review your code online? No problem! Because you've
 - Also uses JSON file in question to load previous comments from last run for better context
 ### (Optional) If you want it to comment as cute white robot:
 - Install https://github.com/apps/zen-ai-qa on your acc or repo
-  - From repo page on Github go to `Settings` -> `Secrets and variables` -> `Actions`
-    - Click `New repository secret`
+- From repo page on Github go to `Settings` -> `Secrets and variables` -> `Actions`
+  - Click `New repository secret`
     - Set `ZEN_DEVOPS_APP_INSTALLATION_ID` with the installation ID (you can find installation ID in url of app settings page after you install app)
     - Set `ZEN_DEVOPS_APP_PRIVATE_KEY` 🚧
 
