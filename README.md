@@ -26,3 +26,4 @@ Differences:
 - Makes use of Gemini 1 million tokens context window by attaching whole file together with changes for better context
 - Loads previous comments on PR update for better context
 - Optimized diff parsing algoritm that work better with GitHub (maybe)
+- Uses Structured Output mode of Gemini API for better parsing of AI output
