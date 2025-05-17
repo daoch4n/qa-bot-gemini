@@ -21,7 +21,8 @@ Don't want to pay Copilot to review your code online? No problem! Because you've
 
 ### See it in action 🪄 : [https://github.com/dtub/DaokoTube](https://github.com/dtub/DaokoTube/pulls?q=is%3Apr+is%3Aclosed)
 
-Inspired by https://github.com/truongnh1992/gemini-ai-code-reviewer
+Inspired by https://github.com/truongnh1992/gemini-ai-code-reviewer 
+<br><br>
 Differences:
 - Batches hunks related to same files to optimize rate limiting
 - Makes use of Gemini 1 million tokens context window by attaching whole file together with changes for better context
