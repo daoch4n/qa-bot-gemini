@@ -19,9 +19,9 @@ Don't want to pay Copilot to review your code online? No problem! Because you've
     - Set `ZEN_DEVOPS_APP_PRIVATE_KEY` (mailto:daoch4n@xn--vck1b.shop)
 - Or make you own app in Developer settings and use its installation ID and key! 🗝️
 
-### See it in action 🪄 : [https://github.com/dtub/DaokoTube](https://github.com/dtub/DaokoTube/pulls?q=is%3Apr+is%3Aclosed)
+### See it in action 🪄 : [dtub/DaokoTube](https://github.com/dtub/DaokoTube/pulls?q=is%3Apr+is%3Aclosed)
 
-Inspired by https://github.com/truongnh1992/gemini-ai-code-reviewer 
+Inspired by [truongnh1992/gemini-ai-code-reviewer](https://github.com/truongnh1992/gemini-ai-code-reviewer)
 <br><br>
 Differences:
 - Batches hunks related to same files to optimize rate limiting
