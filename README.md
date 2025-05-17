@@ -11,8 +11,8 @@ Don't want to pay Copilot to review your code online? No problem! Because you've
     - Secret: the API key you just got from https://aistudio.google.com/
 - It will automatically run on every pull request creation , update and reopen
 - Detailed review feedback will be generated on completion with `Resolve conversation` button <br> along with AI-actionable JSON report (in two formats) <br> auto-commited by cute white robot to your repo `/reviews/` folder
-### (Optional) If you also want it to comment as cute white robot:
-- Install [cute white robot] https://github.com/apps/zen-ai-qa on your acc or repo
+### (Optional) <br> If you also want it to comment as cute white robot:
+- Install [cute white robot](https://github.com/apps/zen-ai-qa) on your acc or repo
 - From repo page on Github go to `Settings` -> `Secrets and variables` -> `Actions`
   - Click `New repository secret`
     - Set `ZEN_DEVOPS_APP_INSTALLATION_ID` with the installation ID <br> (you can find installation ID in url of app settings page after you install app)
