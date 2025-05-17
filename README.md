@@ -24,6 +24,7 @@ Don't want to pay Copilot to review your code online? No problem! Because you've
 Inspired by [truongnh1992/gemini-ai-code-reviewer](https://github.com/truongnh1992/gemini-ai-code-reviewer)
 <br><br>
 Differences:
+- Talks to you as cute white robot <br> (if you set it up)
 - Automatically runs on PR creation, update , reopen
 - Batches hunks related to same files <br> to optimize rate limiting
 - Makes use of Gemini 1 million tokens context window <br> by attaching whole file together with changes for better context
