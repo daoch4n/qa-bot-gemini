@@ -30,5 +30,5 @@ Differences:
 - Optimized diff parsing algoritm that work better with GitHub (maybe)
 - Uses Structured Output mode of Gemini API for better parsing of AI output
 - Rotates API keys through `GEMINI_ALT_1` >> `GEMINI_ALT_4` (dont forget to set them in repos secrets) <br> in case your PRs are really big and active
-- Auto-commits AI-actionable JSON report to your repo /reviews/ folder for futher agentic processing
+- Auto-commits AI-actionable JSON report as cute white robot to your repo `/reviews` folder for futher agentic processing
 - Uses JSON file in question during PR update run to load previous comments from last run <br> for better context during subsequent runs
