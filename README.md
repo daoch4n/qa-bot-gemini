@@ -10,13 +10,14 @@ Don't want to pay Copilot to review your code online? No problem! Because you've
     - Name: `GEMINI_API_KEY`
     - Secret: the API key you just got from https://aistudio.google.com/
 - It will automatically run on every pull request creation , update and reopen
-- Detailed review feedback will be generated on completion with `Resolve conversation` button along with AI-actionable JSON report auto-commited to your repo `/reviews/` folder
-### (Optional) If you want it to comment as cute white robot:
+- Detailed review feedback will be generated on completion with `Resolve conversation` button along with AI-actionable JSON report (in two formats) auto-commited by cute white robot to your repo `/reviews/` folder
+### (Optional) If you also want it to comment as cute white robot:
 - Install https://github.com/apps/zen-ai-qa on your acc or repo
 - From repo page on Github go to `Settings` -> `Secrets and variables` -> `Actions`
   - Click `New repository secret`
     - Set `ZEN_DEVOPS_APP_INSTALLATION_ID` with the installation ID (you can find installation ID in url of app settings page after you install app)
     - Set `ZEN_DEVOPS_APP_PRIVATE_KEY` (mailto:daoch4n@xn--vck1b.shop)
+- Or make you own app in Developer settings and use its installation ID and key! 🗝️
 
 ### See it in action 🪄 : [https://github.com/dtub/DaokoTube](https://github.com/dtub/DaokoTube/pulls?q=is%3Apr+is%3Aclosed)
 
