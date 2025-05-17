@@ -25,9 +25,9 @@ Inspired by https://github.com/truongnh1992/gemini-ai-code-reviewer
 <br><br>
 Differences:
 - Batches hunks related to same files to optimize rate limiting
-- Makes use of Gemini 1 million tokens context window by attaching whole file together with changes for better context
+- Makes use of Gemini 1 million tokens context window <br> by attaching whole file together with changes for better context
 - Optimized diff parsing algoritm that work better with GitHub (maybe)
 - Uses Structured Output mode of Gemini API for better parsing of AI output
-- Rotates API keys through `GEMINI_ALT_1` >> `GEMINI_ALT_4` (dont forget to set them in repos secrets) in case your PRs are really big and active
+- Rotates API keys through `GEMINI_ALT_1` >> `GEMINI_ALT_4` (dont forget to set them in repos secrets) <br> in case your PRs are really big and active
 - Auto-commits AI-actionable JSON report to your repo /reviews/ folder for futher agentic processing
 - Uses JSON file in question during PR update run to load previous comments from last run for better context
