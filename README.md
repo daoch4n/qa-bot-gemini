@@ -4,11 +4,11 @@ Don't want to pay Copilot to review your code online? No problem! Because you've
 
 ### Usage:
 - Put both `.py` and `.yml` files in `.github/workflows/` folder of your repo
-- Go to https://aistudio.google.com/ and obtain Gemini API key there
+- Go to [AI Studio](https://aistudio.google.com/) and obtain Gemini API key there
 - From repo page on Github go to `Settings` -> `Secrets and variables` -> `Actions`
   - Click `New repository secret`
     - Name: `GEMINI_API_KEY`
-    - Secret: the API key you just got from https://aistudio.google.com/
+    - Secret: the API key you just got from [AI Studio](https://aistudio.google.com/)
 - It will automatically run on every pull request creation , update and reopen
 - Detailed review feedback will be generated on completion with `Resolve conversation` button <br> along with AI-actionable JSON report (in two formats) <br> auto-commited by cute white robot to your repo `/reviews/` folder
 ### (Optional) <br> If you also want it to comment as cute white robot:
