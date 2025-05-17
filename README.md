@@ -12,11 +12,11 @@ Don't want to pay Copilot to review your code online? No problem! Because you've
 - It will automatically run on every pull request creation , update and reopen
 - Detailed review feedback will be generated on completion with `Resolve conversation` button <br> along with AI-actionable JSON report (in two formats) <br> auto-commited by cute white robot to your repo `/reviews/` folder
 ### (Optional) If you also want it to comment as cute white robot:
-- Install https://github.com/apps/zen-ai-qa on your acc or repo
+- Install [cute white robot] https://github.com/apps/zen-ai-qa on your acc or repo
 - From repo page on Github go to `Settings` -> `Secrets and variables` -> `Actions`
   - Click `New repository secret`
     - Set `ZEN_DEVOPS_APP_INSTALLATION_ID` with the installation ID <br> (you can find installation ID in url of app settings page after you install app)
-    - Set `ZEN_DEVOPS_APP_PRIVATE_KEY` (mailto:daoch4n@xn--vck1b.shop)
+    - Set `ZEN_DEVOPS_APP_PRIVATE_KEY` <br> (mailto:daoch4n@xn--vck1b.shop) (autokeygen is coming)
 - Or make you own app in Developer settings and use its installation ID and key! 🗝️
 
 ### See it in action 🪄 : [dtub/DaokoTube](https://github.com/dtub/DaokoTube/pulls?q=is%3Apr+is%3Aclosed)
