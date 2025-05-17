@@ -16,10 +16,11 @@ Don't want to pay Copilot to review your code online? No problem! Because you've
 - From repo page on Github go to `Settings` -> `Secrets and variables` -> `Actions`
   - Click `New repository secret`
     - Set `ZEN_DEVOPS_APP_INSTALLATION_ID` with the installation ID (you can find installation ID in url of app settings page after you install app)
-    - Set `ZEN_DEVOPS_APP_PRIVATE_KEY` 🚧
+    - Set `ZEN_DEVOPS_APP_PRIVATE_KEY` (mailto:daoch4n@xn--vck1b.shop)
 
 ### See it in action 🪄 : [https://github.com/dtub/DaokoTube](https://github.com/dtub/DaokoTube/pulls?q=is%3Apr+is%3Aclosed)
-### Inspired by https://github.com/truongnh1992/gemini-ai-code-reviewer
+
+Inspired by https://github.com/truongnh1992/gemini-ai-code-reviewer
 Differences:
 - Batches hunks related to same files to optimize rate limiting
 - Makes use of Gemini 1 million tokens context window by attaching whole file together with changes for better context
