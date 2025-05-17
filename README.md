@@ -10,7 +10,7 @@ Don't want to pay Copilot to review your code online? No problem! Because you've
     - Name: `GEMINI_API_KEY`
     - Secret: the API key you just got from https://aistudio.google.com/
 - It will automatically run on every pull request creation , update and reopen
-- Detailed review feedback will be generated on completion with `Resolve conversation` button along with AI-actionable JSON report (in two formats) auto-commited by cute white robot to your repo `/reviews/` folder
+- Detailed review feedback will be generated on completion with `Resolve conversation` button <br> along with AI-actionable JSON report (in two formats) <br> auto-commited by cute white robot to your repo `/reviews/` folder
 ### (Optional) If you also want it to comment as cute white robot:
 - Install https://github.com/apps/zen-ai-qa on your acc or repo
 - From repo page on Github go to `Settings` -> `Secrets and variables` -> `Actions`
