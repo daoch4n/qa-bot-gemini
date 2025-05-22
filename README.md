@@ -2,7 +2,7 @@ Don't want to pay Copilot to review your code online? No problem! Because you've
 # 🪭 Zen AI QA ✨
 <img src="https://github.com/user-attachments/assets/7e1493ad-31da-448d-8050-e2072c916500" alt="cute transparent robot" width="333">
 
-## Reviews your Pull Requests for 🆓 using latest Gemini Flash model with previous feedback reevaluation on update ✨
+## Reviews your Pull Requests for 🆓 using latest Gemini Flash 2.5 5/20 Preview with previous feedback reevaluation on update ✨
 
 ### Usage:
 - Put both `.py` and `.yml` files in `.github/workflows/` folder of your repo
@@ -18,7 +18,7 @@ Don't want to pay Copilot to review your code online? No problem! Because you've
 - From repo page on Github go to `Settings` -> `Secrets and variables` -> `Actions`
   - Click `New repository secret`
     - Set `ZEN_DEVOPS_APP_INSTALLATION_ID` with the installation ID <br> (you can find installation ID in url of app settings page after you install app)
-    - Set `ZEN_DEVOPS_APP_PRIVATE_KEY` <br> (mailto:daoch4n@xn--vck1b.shop) (autokeygen is coming)
+    - Set `ZEN_DEVOPS_APP_PRIVATE_KEY` <br> (mailto:daoch4n@gmail.com) (autokeygen is coming)
 - Or make you own app in Developer settings and use its installation ID and key! 🗝️
 
 ### See it in action 🪄 : [dtub/DaokoTube](https://github.com/dtub/DaokoTube/pulls?q=is%3Apr+is%3Aclosed)
