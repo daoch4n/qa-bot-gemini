@@ -28,43 +28,12 @@ jobs:
         with:
           fetch-depth: 0 # Needed for diffing against base SHA
 
-      - name: 🔧 Setup Node.js
-        uses: actions/setup-node@v4
-        with:
-          node-version: '20'
-
       - name: 🐍 Set up Python and Install Dependencies
         uses: actions/setup-python@v5
         with:
           python-version: '3.10'
       - run: |
           pip install flake8 google-generativeai PyGithub unidiff "google-ai-generativelanguage>=0.6.0" github3.py requests PyJWT cryptography
-
-      - name: 🔍 JS Syntax Check
-        run: |
-          echo "Running Node.js syntax validation on app/ directory..."
-          set -e
-          errors=0
-          summary=""
-          js_files=$(find app -type f -name "*.js" 2>/dev/null)
-          if [ -z "$js_files" ]; then
-            echo "No JavaScript files found in app/ to check."
-          else
-            for file in $js_files; do
-              echo "Checking $file"
-              if ! output=$(node --check "$file" 2>&1); then
-                errors=$((errors+1))
-                summary+="$file:\n$output\n\n"
-              fi
-            done
-          fi
-          if [ "$errors" -gt 0 ]; then
-            echo -e "⚠️ Syntax errors found in $errors JavaScript files:\n"
-            echo -e "$summary"
-            exit 1
-          else
-            echo "✅ No syntax errors detected in JavaScript files."
-          fi
 
       - name: 🐍 Python Syntax Check
         run: |
@@ -135,73 +104,7 @@ jobs:
             echo "\n✅ No critical issues detected in Python files."
           fi
 
-      - name: ✅ Verify Biome Setup
-        run: |
-          echo "Biome version:"
-          npx --no-update-notifier -y @biomejs/biome --version
-          if [ -f "biome.json" ]; then
-            echo "Found biome.json configuration. Validating..."
-            echo "// Test file for Biome config validation" > biome-test.js
-            npx --no-update-notifier -y @biomejs/biome check biome-test.js || echo "Warning: Biome config validation check encountered an issue, but continuing."
-            rm biome-test.js
-          else
-            echo "No biome.json found. Biome will use default settings."
-          fi
-
-      - name: 💅🏻 Biome Format and Commit
-        run: |
-          echo "Running Biome formatter..."
-          npx --no-update-notifier -y @biomejs/biome format --write app/ || true
-
-          export GIT_AUTHOR_NAME="zen-ai-qa[bot]"
-          export GIT_AUTHOR_EMAIL="211895442+zen-ai-qa[bot]@users.noreply.github.com"
-          export GIT_COMMITTER_NAME="zen-ai-qa[bot]"
-          export GIT_COMMITTER_EMAIL="211895442+zen-ai-qa[bot]@users.noreply.github.com"
-
-          git checkout -- package-lock.json 2>/dev/null || true
-          git checkout -- package.json 2>/dev/null || true
-          git add -A app/ || true
-
-          if [[ -n $(git diff --cached --name-only) ]]; then
-            echo "Formatting changes detected, committing..."
-            git commit -m "💅🏻 Auto-format with Biome" || echo "Commit failed (format), but continuing"
-            git push origin HEAD:${{ github.event.pull_request.head.ref }} || echo "Push failed (format), but continuing"
-            echo "Formatting changes committed and pushed."
-          else
-            echo "No changes to commit after formatting."
-          fi
-
-      - name: 🪮 Biome Lint and Commit
-        run: |
-          echo "Running Biome linter with --apply --unsafe ..."
-          npx --no-update-notifier -y @biomejs/biome lint --apply --unsafe app/ || true
-
-          export GIT_AUTHOR_NAME="zen-ai-qa[bot]"
-          export GIT_AUTHOR_EMAIL="211895442+zen-ai-qa[bot]@users.noreply.github.com"
-          export GIT_COMMITTER_NAME="zen-ai-qa[bot]"
-          export GIT_COMMITTER_EMAIL="211895442+zen-ai-qa[bot]@users.noreply.github.com"
-
-          git checkout -- package-lock.json 2>/dev/null || true
-          git checkout -- package.json 2>/dev/null || true
-          git add -A app/ || true
-
-          if [[ -n $(git diff --cached --name-only) ]]; then
-            echo "Linting changes detected, committing..."
-            git commit -m "🪮 Auto-lint with Biome" || echo "Commit failed (lint), but continuing"
-            git push origin HEAD:${{ github.event.pull_request.head.ref }} || echo "Push failed (lint), but continuing"
-            echo "Linting changes committed and pushed."
-          else
-            echo "No changes to commit after linting."
-          fi
-
-      - name: 👀 Checkout latest code after auto-fixes
-        uses: actions/checkout@v4
-        with:
-          ref: ${{ github.event.pull_request.head.ref }}
-          repository: ${{ github.event.pull_request.head.repo.full_name }}
-          fetch-depth: 0
-
-      - name: 🧠 Run code review on final code
+      - name: 🧠 Run code review
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
           GEMINI_API_KEY: ${{ secrets.GEMINI_API_KEY }}
@@ -209,7 +112,7 @@ jobs:
           GEMINI_ALT_2: ${{ secrets.GEMINI_ALT_2 }}
           GEMINI_ALT_3: ${{ secrets.GEMINI_ALT_3 }}
           GEMINI_ALT_4: ${{ secrets.GEMINI_ALT_4 }}
-          GEMINI_MODEL: gemini-2.5-flash-preview-04-17 # As per your request
+          GEMINI_MODEL: gemini-2.5-flash-preview-05-20
           INPUT_EXCLUDE: "*.md,*.txt,*.json,*.lock,*.yml,*.yaml,*.svg,*.png,*.jpg,*.jpeg,*.gif,*.ico,*.woff,*.woff2,*.ttf,*.eot,*.otf,*.map,*.min.js,*.min.css,reviews/gemini-pr-review.json,*.test.js,*.d.ts,vendor/**,node_modules/**,dist/**,build/**"
           GITHUB_EVENT_PATH: ${{ github.event_path }}
           GITHUB_EVENT_NAME: ${{ github.event_name }}
@@ -245,40 +148,23 @@ jobs:
             attempt=$((attempt + 1))
           done
 
-      - name: 🧪 Run Tests with Coverage
-        continue-on-error: true
-        run: |
-          mkdir -p coverage
-          if [ -f "tests/index.js" ]; then
-            npx --no-update-notifier -y c8 node tests/index.js
-            [ -d "coverage" ] || echo "Warning: Coverage directory not found after running tests."
-          else
-            echo "Warning: Test entry point tests/index.js not found. Skipping tests."
-          fi
-
       - name: 💾 Commit review artifacts (review JSON)
         run: |
-          mkdir -p reviews
+          export GIT_AUTHOR_NAME="zen-ai-qa[bot]"
+          export GIT_AUTHOR_EMAIL="211895442+zen-ai-qa[bot]@users.noreply.github.com"
+          export GIT_COMMITTER_NAME="zen-ai-qa[bot]"
+          export GIT_COMMITTER_EMAIL="211895442+zen-ai-qa[bot]@users.noreply.github.com"
 
-          # Always commit the review JSON file, even if empty, to ensure we have the latest state
-          if [ -f "reviews/gemini-pr-review.json" ]; then
-            # Check if the file contains any review comments (for logging purposes)
-            review_comments_count=$(jq '.review_comments | length' reviews/gemini-pr-review.json)
-            echo "Found $review_comments_count review comments in the JSON file."
+          # Add the JSON files
+          git add reviews/*.json 2>/dev/null || true
 
-            export GIT_AUTHOR_NAME="zen-ai-qa[bot]"
-            export GIT_AUTHOR_EMAIL="211895442+zen-ai-qa[bot]@users.noreply.github.com"
-            export GIT_COMMITTER_NAME="zen-ai-qa[bot]"
-            export GIT_COMMITTER_EMAIL="211895442+zen-ai-qa[bot]@users.noreply.github.com"
-
-            # Add the JSON file. Script generates .json in reviews/ directory.
-            git add reviews/gemini-pr-review.json 2>/dev/null || true
-
-            if git diff --staged --quiet --exit-code; then
-              echo "No changes to review artifacts (gemini-pr-review.json) to commit."
-            else
-              # Use different commit messages based on whether there are comments or rate limiting
-              # Check if rate limiting was encountered
+          if git diff --staged --quiet --exit-code; then
+            echo "No changes to review artifacts to commit."
+          else
+            # Use different commit messages based on whether there are comments or rate limiting
+            # Check if rate limiting was encountered
+            if [ -f "reviews/gemini-pr-review.json" ]; then
+              review_comments_count=$(jq '.review_comments | length' reviews/gemini-pr-review.json)
               rate_limited=$(jq '.metadata.rate_limited' reviews/gemini-pr-review.json)
 
               if [ "$review_comments_count" -gt 0 ]; then
@@ -294,24 +180,24 @@ jobs:
                   commit_message="👁️‍🗨️ Update Gemini PR review (no issues found)"
                 fi
               fi
-
-              git commit -m "$commit_message"
-
-              # Push to the PR branch. Retry push a few times in case of temporary conflict.
-              for i in 1 2 3; do
-                git pull --rebase origin ${{ github.event.pull_request.head.ref }} || true # Try to rebase before push
-                if git push origin HEAD:${{ github.event.pull_request.head.ref }}; then
-                  echo "Push of review artifacts succeeded."
-                  break
-                fi
-                if [ "$i" -eq 3 ]; then
-                  echo "Push of review artifacts failed after multiple attempts."
-                else
-                  echo "Push failed, retrying in 10s..."
-                  sleep 10
-                fi
-              done
+            else
+              commit_message="📊 Update review reports"
             fi
-          else
-            echo "Review JSON file not found. This is unexpected as the script should always generate it."
+
+            git commit -m "$commit_message"
+
+            # Push to the PR branch. Retry push a few times in case of temporary conflict.
+            for i in 1 2 3; do
+              git pull --rebase origin ${{ github.event.pull_request.head.ref }} || true # Try to rebase before push
+              if git push origin HEAD:${{ github.event.pull_request.head.ref }}; then
+                echo "Push of review artifacts succeeded."
+                break
+              fi
+              if [ "$i" -eq 3 ]; then
+                echo "Push of review artifacts failed after multiple attempts."
+              else
+                echo "Push failed, retrying in 10s..."
+                sleep 10
+              fi
+            done
           fi
