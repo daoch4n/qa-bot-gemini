@@ -58,7 +58,8 @@ class GitHubAuthenticator:
             logger.info("Using private key from environment variable (less secure)")
             private_key = os.environ.get("ZEN_APP_PRIVATE_KEY")
             # Replace newline placeholders if the key was stored with them
-            return private_key.replace('\\n', '\n')
+            # Ensure private_key is not None before calling replace
+            return private_key.replace('\\n', '\n') if private_key else None
 
         return None
 
@@ -93,7 +94,7 @@ class GitHubAuthenticator:
             logger.info(f"Successfully generated JWT token for GitHub App ID: {self.app_id}")
             return jwt_token
         except Exception as e:
-            logger.error(f"Error generating JWT token: {e}")
+            logger.error("Error generating JWT token: %s", e, exc_info=True)
             traceback.print_exc()
             return None
 
@@ -134,7 +135,7 @@ class GitHubAuthenticator:
             logger.info(f"Successfully obtained installation access token for installation ID: {self.installation_id}")
             return access_token
         except Exception as e:
-            logger.error(f"Error getting installation access token: {e}")
+            logger.error("Error getting installation access token: %s", e, exc_info=True)
             traceback.print_exc()
             return None
 
@@ -177,10 +178,10 @@ class GitHubAuthenticator:
                             self.client = Github(installation_token)
                             return self.client, self.token
                     except Exception as e:
-                        logger.error(f"Error getting installation access token: {e}")
+                        logger.error("Error getting installation access token: %s", e, exc_info=True)
                         logger.info("Falling back to GITHUB_TOKEN due to installation token error")
             except Exception as e:
-                logger.error(f"Error during JWT token generation: {e}")
+                logger.error("Error during JWT token generation: %s", e, exc_info=True)
                 logger.info("Falling back to GITHUB_TOKEN due to JWT generation error")
         else:
             # Log specific reason for not using GitHub App authentication
@@ -210,22 +211,15 @@ class GeminiKeyManager:
     Supports multiple alternative keys (GEMINI_ALT_1 through GEMINI_ALT_4).
     """
     def __init__(self):
-        # Initialize primary key
+        # Initialize primary and fallback keys
         self.primary_key = os.environ.get("GEMINI_API_KEY")
+        self.fallback_key = os.environ.get("GEMINI_FALLBACK_API_KEY")
+
         if not self.primary_key:
             logger.error("GEMINI_API_KEY environment variable is required")
             raise ValueError("GEMINI_API_KEY environment variable is required")
 
-        # Initialize alternative keys
-        self.alt_keys = {}
-        for i in range(1, 5):  # GEMINI_ALT_1 through GEMINI_ALT_4
-            key_name = f"GEMINI_ALT_{i}"
-            key_value = os.environ.get(key_name)
-            if key_value:
-                self.alt_keys[key_name] = key_value
-                logger.info(f"Alternative key {key_name} is available for rotation")
-
-        # Set current key to primary
+        # Set current key to primary initially
         self.current_key = self.primary_key
         self.current_key_name = "GEMINI_API_KEY"
 
@@ -234,12 +228,17 @@ class GeminiKeyManager:
         self.encountered_rate_limiting = False
         self.all_keys_rate_limited = False
         self.used_fallback_key = False
-        self.rotation_order = ["GEMINI_API_KEY"] + list(self.alt_keys.keys())
+
+        # Define rotation order: primary, then fallback if available
+        self.rotation_order = ["GEMINI_API_KEY"]
+        if self.fallback_key:
+            self.rotation_order.append("GEMINI_FALLBACK_API_KEY")
+            logger.info("Fallback API key is available for rotation.")
+        else:
+            logger.warning("No GEMINI_FALLBACK_API_KEY found. API key rotation will not be available.")
 
         # Log initialization status
-        logger.info(f"Initialized GeminiKeyManager with primary key and {len(self.alt_keys)} alternative keys")
-        if not self.alt_keys:
-            logger.warning("No alternative keys (GEMINI_ALT_1 through GEMINI_ALT_4) found. API key rotation will not be available.")
+        logger.info(f"Initialized GeminiKeyManager with primary key and {'a fallback key' if self.fallback_key else 'no fallback key'}")
 
     def get_current_key(self):
         """Get the currently active API key."""
@@ -253,60 +252,34 @@ class GeminiKeyManager:
         """Get an API key by its name."""
         if key_name == "GEMINI_API_KEY":
             return self.primary_key
-        return self.alt_keys.get(key_name)
+        elif key_name == "GEMINI_FALLBACK_API_KEY":
+            return self.fallback_key
+        return None
 
     def rotate_key(self):
         """
         Rotate to the next available API key in sequence.
         Returns True if rotation was successful, False if no more keys are available.
         """
-        # Mark current key as rate limited
         self.rate_limited_keys.add(self.current_key_name)
+        self.encountered_rate_limiting = True # Ensure this flag is set
 
-        # Find the next available key in rotation order
-        current_index = self.rotation_order.index(self.current_key_name)
-        tried_count = 0
-
-        # Try each key in sequence until we find one that's not rate limited
-        while tried_count < len(self.rotation_order):
-            # Move to next key in rotation order
-            next_index = (current_index + 1) % len(self.rotation_order)
-            next_key_name = self.rotation_order[next_index]
-
-            # Skip if this key is already rate limited
-            if next_key_name in self.rate_limited_keys:
-                current_index = next_index
-                tried_count += 1
-                continue
-
-            # Get the actual key value
-            next_key = self.get_key_by_name(next_key_name)
-            if not next_key:
-                # This key doesn't exist or is empty, mark as rate limited and continue
-                self.rate_limited_keys.add(next_key_name)
-                current_index = next_index
-                tried_count += 1
-                continue
-
-            # Found a valid key, update current key
-            logger.info(f"Rotating from {self.current_key_name} to {next_key_name} due to rate limiting")
-            self.current_key = next_key
-            self.current_key_name = next_key_name
-            self.used_fallback_key = True  # Mark that we successfully used a fallback key
+        # Attempt to rotate to the fallback key if available and not already rate-limited
+        if self.fallback_key and "GEMINI_FALLBACK_API_KEY" not in self.rate_limited_keys:
+            logger.info(f"Rotating from {self.current_key_name} to GEMINI_FALLBACK_API_KEY due to rate limiting")
+            self.current_key = self.fallback_key
+            self.current_key_name = "GEMINI_FALLBACK_API_KEY"
+            self.used_fallback_key = True
             return True
-
-            # Note: Code below is unreachable due to return statement above
-            # Keeping for clarity of algorithm
-            # current_index = next_index
-            # tried_count += 1
-
-        # If we get here, we've tried all keys and they're all rate limited
-        logger.warning("All API keys are rate limited. Resetting to primary key.")
-        self.current_key = self.primary_key
-        self.current_key_name = "GEMINI_API_KEY"
-        self.all_keys_rate_limited = True  # Mark that all keys were rate limited
-        self.rate_limited_keys.clear()  # Clear the set to try again
-        return False
+        else:
+            # If fallback is not available or already rate-limited, all keys are exhausted
+            logger.warning("All available API keys are rate limited or unavailable. Resetting to primary key.")
+            self.current_key = self.primary_key
+            self.current_key_name = "GEMINI_API_KEY"
+            self.all_keys_rate_limited = True # Mark that all keys were rate limited
+            self.rate_limited_keys.clear() # Clear the set to try again
+            self.used_fallback_key = False # Reset fallback flag
+            return False
 
     def is_rate_limit_error(self, error):
         """
@@ -368,74 +341,119 @@ try:
 
     logger.info("Successfully initialized GitHub and Gemini clients")
 except ValueError as e:
-    logger.error(f"Initialization error: {str(e)}")
+    logger.error("Initialization error: %s", e, exc_info=True)
     sys.exit(1)
 except Exception as e:
-    logger.error(f"Unexpected error during initialization: {str(e)}")
+    logger.error("Unexpected error during initialization: %s", e, exc_info=True)
     traceback.print_exc()
     sys.exit(1)
 
 
-class PRDetails:
-    def __init__(self, owner: str, repo_name_str: str, pull_number: int, title: str, description: str, repo_obj=None, pr_obj=None, event_type: str = None):
+class ReviewContext:
+    def __init__(self, owner: str, repo_name_str: str, event_type: str, repo_obj=None,
+                 pull_number: Optional[int] = None, pr_obj=None,
+                 commit_sha: Optional[str] = None, commit_obj=None,
+                 title: Optional[str] = None, description: Optional[str] = None):
         self.owner = owner
         self.repo_name = repo_name_str
+        self.event_type = event_type
+        self.repo_obj = repo_obj
         self.pull_number = pull_number
+        self.pr_obj = pr_obj
+        self.commit_sha = commit_sha
+        self.commit_obj = commit_obj
         self.title = title
         self.description = description
-        self.repo_obj = repo_obj
-        self.pr_obj = pr_obj
-        self.event_type = event_type
 
     def get_full_repo_name(self):
         return f"{self.owner}/{self.repo_name}"
 
-
-def get_pr_details() -> PRDetails:
+def get_review_context() -> ReviewContext:
     github_event_path = os.environ.get("GITHUB_EVENT_PATH")
     if not github_event_path:
-        print("Error: GITHUB_EVENT_PATH environment variable not set.")
+        logger.error("Error: GITHUB_EVENT_PATH environment variable not set.")
         sys.exit(1)
 
     with open(github_event_path, "r", encoding="utf-8") as f:
         event_data = json.load(f)
 
     event_name = os.environ.get("GITHUB_EVENT_NAME")
-    pr_event_type = None
-
-    if event_name == "issue_comment":
-        if "issue" in event_data and "pull_request" in event_data["issue"]:
-            pull_number = event_data["issue"]["number"]
-            repo_full_name = event_data["repository"]["full_name"]
-            pr_event_type = "comment"
-        else:
-            print("Error: issue_comment event not on a pull request.")
-            sys.exit(1)
-    elif event_name == "pull_request":
-        pull_number = event_data["pull_request"]["number"]
-        repo_full_name = event_data["repository"]["full_name"]
-        pr_event_type = event_data.get("action")
-        print(f"Pull request event action: {pr_event_type}")
-    else:
-        print(f"Error: Unsupported GITHUB_EVENT_NAME: {event_name}")
-        sys.exit(1)
-
+    repo_full_name = event_data["repository"]["full_name"]
     owner, repo_name_str = repo_full_name.split("/")
-
+    repo_obj = None
     try:
-        repo_obj = gh.get_repo(repo_full_name)
-        pr_obj = repo_obj.get_pull(pull_number)
+        repo_obj = gh.get_repo(repo_full_name) if gh else None
     except GithubException as e:
-        print(f"Error accessing GitHub repository or PR: {e}")
+        logger.error("Error accessing GitHub repository: %s", e, exc_info=True)
         sys.exit(1)
     except Exception as e:
-        print(f"An unexpected error occurred while fetching PR details: {e}")
+        logger.error("An unexpected error occurred while fetching repo details: %s", e, exc_info=True)
         sys.exit(1)
 
-    return PRDetails(owner, repo_name_str, pull_number, pr_obj.title, pr_obj.body or "", repo_obj, pr_obj, pr_event_type)
+    if event_name == "pull_request":
+        pull_number = event_data["pull_request"]["number"]
+        pr_obj = None
+        try:
+            pr_obj = repo_obj.get_pull(pull_number) if repo_obj else None
+        except GithubException as e:
+            logger.error("Error accessing GitHub PR: %s", e, exc_info=True)
+            sys.exit(1)
+        except Exception as e:
+            logger.error("An unexpected error occurred while fetching PR details: %s", e, exc_info=True)
+            sys.exit(1)
+
+        pr_title = pr_obj.title if pr_obj else ""
+        pr_body = pr_obj.body if pr_obj else ""
+        logger.info(f"Detected event type: pull_request (action: {event_data.get('action')})")
+        return ReviewContext(owner, repo_name_str, "pull_request", repo_obj, pull_number, pr_obj,
+                             title=pr_title, description=pr_body)
+
+    elif event_name == "push":
+        commit_sha = os.environ.get("GITHUB_SHA")
+        before_sha = os.environ.get("GITHUB_BEFORE")
+        if not commit_sha:
+            logger.error("Error: GITHUB_SHA environment variable not set for push event.")
+            sys.exit(1)
+
+        commit_obj = None
+        try:
+            commit_obj = repo_obj.get_commit(commit_sha) if repo_obj else None
+        except GithubException as e:
+            logger.error("Error accessing GitHub commit: %s", e, exc_info=True)
+            sys.exit(1)
+        except Exception as e:
+            logger.error("An unexpected error occurred while fetching commit details: %s", e, exc_info=True)
+            sys.exit(1)
+
+        commit_message = commit_obj.commit.message if commit_obj and commit_obj.commit else ""
+        logger.info(f"Detected event type: push. Commit SHA: {commit_sha}")
+        return ReviewContext(owner, repo_name_str, "push", repo_obj,
+                             commit_sha=commit_sha, commit_obj=commit_obj,
+                             title=f"Commit: {commit_message.splitlines()[0] if commit_message.strip() else 'No Commit Title'}", description=commit_message)
+
+    elif event_name == "issue_comment":
+        if "issue" in event_data and "pull_request" in event_data["issue"]:
+            pull_number = event_data["issue"]["number"]
+            pr_obj = None
+            try:
+                pr_obj = repo_obj.get_pull(pull_number) if repo_obj else None
+            except GithubException as e:
+                logger.error("Error accessing GitHub PR for issue_comment: %s", e, exc_info=True)
+                sys.exit(1)
+            pr_title = pr_obj.title if pr_obj else ""
+            pr_body = pr_obj.body if pr_obj else ""
+            logger.info(f"Detected event type: issue_comment on PR #{pull_number}")
+            return ReviewContext(owner, repo_name_str, "issue_comment", repo_obj, pull_number, pr_obj,
+                                 title=pr_title, description=pr_body)
+        else:
+            logger.error("Error: issue_comment event not on a pull request.")
+            sys.exit(1)
+    else:
+        logger.error(f"Error: Unsupported GITHUB_EVENT_NAME: {event_name}")
+        sys.exit(1)
 
 
-def get_diff(pr_details: PRDetails, comparison_sha: Optional[str] = None) -> str:
+def get_diff(review_context: ReviewContext, comparison_sha: Optional[str] = None) -> str:
     """
     Get the diff for a PR, with multiple fallback strategies.
 
@@ -446,21 +464,27 @@ def get_diff(pr_details: PRDetails, comparison_sha: Optional[str] = None) -> str
     Returns:
         str: The diff text or empty string if all methods fail
     """
-    repo = pr_details.repo_obj
-    pr = pr_details.pr_obj
-    head_sha = pr.head.sha
+    repo = review_context.repo_obj
+    pr = review_context.pr_obj
+    head_sha = None
+    if review_context.event_type == "pull_request" and review_context.pr_obj:
+        head_sha = review_context.pr_obj.head.sha
+    elif review_context.event_type == "push" and review_context.commit_obj:
+        head_sha = review_context.commit_sha # Use the current commit SHA for push events
 
     # Strategy 1: Use repo.compare if comparison_sha is provided
     if comparison_sha:
         logger.info(f"Getting diff comparing HEAD ({head_sha}) against specified SHA ({comparison_sha})")
         try:
-            comparison_obj = repo.compare(comparison_sha, head_sha)
+            comparison_obj = repo.compare(comparison_sha, head_sha) if repo and head_sha else None
             diff_parts = []
-            for file_diff in comparison_obj.files:
-                if file_diff.patch:
-                    # Construct a valid diff header format for unidiff
-                    source_file_path_for_header = file_diff.previous_filename if file_diff.status == 'renamed' else file_diff.filename
-                    target_file_path_for_header = file_diff.filename
+            # Ensure comparison_obj is not None before accessing its 'files' attribute
+            if comparison_obj and comparison_obj.files:
+                for file_diff in comparison_obj.files:
+                    if file_diff.patch:
+                        # Construct a valid diff header format for unidiff
+                        source_file_path_for_header = file_diff.previous_filename if file_diff.status == 'renamed' else file_diff.filename
+                        target_file_path_for_header = file_diff.filename
 
                     diff_header = f"diff --git a/{source_file_path_for_header} b/{target_file_path_for_header}\n"
                     if file_diff.status == 'added':
@@ -507,27 +531,40 @@ def get_diff(pr_details: PRDetails, comparison_sha: Optional[str] = None) -> str
         except GithubException as e:
             logger.warning(f"Error getting comparison diff (compare {comparison_sha} vs {head_sha}): {e}. Falling back.")
         except Exception as e:
-            logger.error(f"Unexpected error during repo.compare: {e}. Falling back.")
+            logger.error("Unexpected error during repo.compare: %s. Falling back.", e, exc_info=True)
             traceback.print_exc()
 
-    # Strategy 2: Use pr.get_diff()
-    logger.info(f"Falling back to pr.get_diff() for PR #{pr_details.pull_number}")
-    try:
-        diff_text = pr.get_diff() # This is usually well-formatted for unidiff
-        if diff_text:
-            logger.info(f"Retrieved diff (length: {len(diff_text)}) using pr.get_diff()")
-            return diff_text
-        else:
-            logger.warning("pr.get_diff() returned no content.")
-            return ""
-    except GithubException as e:
-        logger.warning(f"Error getting diff using pr.get_diff(): {e}. Falling back further.")
-    except Exception as e:
-        logger.error(f"Unexpected error during pr.get_diff(): {e}. Falling back further.")
+    # Strategy 2: Use pr.get_diff() (only for PRs)
+    if review_context.event_type == "pull_request" and review_context.pr_obj:
+        logger.info(f"Falling back to pr.get_diff() for PR #{review_context.pull_number}")
+        try:
+            diff_text = review_context.pr_obj.get_diff() # This is usually well-formatted for unidiff
+            if diff_text:
+                logger.info(f"Retrieved diff (length: {len(diff_text)}) using pr.get_diff()")
+                return diff_text
+            else:
+                logger.warning("pr.get_diff() returned no content.")
+                return ""
+        except GithubException as e:
+            logger.warning(f"Error getting diff using pr.get_diff(): {e}. Falling back further.")
+        except Exception as e:
+            logger.error("Unexpected error during pr.get_diff(): %s. Falling back further.", e, exc_info=True)
 
     # Strategy 3: Use direct API request with proper authentication
-    logger.info(f"Falling back to direct API request for PR diff for PR #{pr_details.pull_number}")
-    api_url = f"https://api.github.com/repos/{pr_details.get_full_repo_name()}/pulls/{pr_details.pull_number}"
+    # This strategy can be adapted for both PRs and commits if needed, but for now,
+    # it's primarily used as a fallback for PR diffs.
+    api_url = ""
+    if review_context.event_type == "pull_request" and review_context.pull_number:
+        logger.info(f"Falling back to direct API request for PR diff for PR #{review_context.pull_number}")
+        api_url = f"https://api.github.com/repos/{review_context.get_full_repo_name()}/pulls/{review_context.pull_number}"
+    elif review_context.event_type == "push" and comparison_sha and review_context.commit_sha:
+        logger.info(f"Falling back to direct API request for commit diff for {review_context.commit_sha}")
+        # For commits, GitHub API provides a compare endpoint:
+        # GET /repos/{owner}/{repo}/compare/{basehead}
+        api_url = f"https://api.github.com/repos/{review_context.get_full_repo_name()}/compare/{comparison_sha}...{review_context.commit_sha}"
+    else:
+        logger.error("Cannot determine API URL for diff based on review context.")
+        return ""
 
     # Use the global authenticator instance for authentication
     headers = {
@@ -570,9 +607,9 @@ def get_diff(pr_details: PRDetails, comparison_sha: Optional[str] = None) -> str
         logger.info(f"Retrieved diff (length: {len(diff_text)}) via direct API call.")
         return diff_text
     except requests.exceptions.RequestException as e:
-        logger.error(f"Failed to get diff via direct API call: {e}")
+        logger.error("Failed to get diff via direct API call: %s", e, exc_info=True)
     except Exception as e:
-        logger.error(f"Unexpected error during direct API call for diff: {e}")
+        logger.error("Unexpected error during direct API call for diff: %s", e, exc_info=True)
 
     logger.error("All methods to retrieve diff failed.")
     return ""
@@ -651,18 +688,20 @@ def get_previous_file_comments(review_data: Dict[str, Any], file_path: str) -> L
 
     file_comments = []
     for comment in review_data.get("review_comments", []):
-        if comment.get("file_path") == file_path:
+        comment_text = comment.get("comment_text_md", "")
+        if comment.get("file_path") == file_path and "[IGNORED]" not in comment_text:
             file_comments.append(comment)
 
     print(f"Found {len(file_comments)} previous comments for file {file_path}")
     return file_comments
 
 
-def create_batch_prompt(patched_file: PatchedFile, pr_details: PRDetails) -> str:
+def create_batch_prompt(patched_file: PatchedFile, review_context: ReviewContext) -> str:
     full_file_content_for_context = get_file_content(patched_file.path)
 
-    # Load previous review data
-    previous_review_data = load_previous_review_data()
+    # Load previous review data (adjust filepath based on event type)
+    review_data_filepath = "reviews/gemini-pr-review.json" if review_context.event_type == "pull_request" else "reviews/gemini-commit-review.json"
+    previous_review_data = load_previous_review_data(filepath_str=review_data_filepath)
     previous_file_comments = get_previous_file_comments(previous_review_data, patched_file.path)
 
     combined_hunks_text = ""
@@ -674,7 +713,11 @@ def create_batch_prompt(patched_file: PatchedFile, pr_details: PRDetails) -> str
         separator = ("-" * 20) + f" Hunk {i+1} (0-indexed: {i}) " + ("-" * 20) + "\n"
         combined_hunks_text += ("\n\n" if i > 0 else "") + separator + hunk_text
 
-    instructions = """Your task is reviewing pull requests. You will provide structured output in JSON format.
+    # Adjust instructions based on event type
+    review_type_instruction = "pull requests" if review_context.event_type == "pull_request" else "code commits"
+    # Escape any literal '%' characters in review_type_instruction for f-string
+    escaped_review_type_instruction = review_type_instruction.replace('%', '%%')
+    instructions = f"""Your task is reviewing {escaped_review_type_instruction}. You will provide structured output in JSON format.
 
 REVIEW GUIDELINES:
 - Focus on logic flaws, inconsistencies, and bugs that would affect how the application runs. These include:
@@ -708,17 +751,17 @@ HANDLING PREVIOUS REVIEW COMMENTS:
 
 RESPONSE FORMAT:
 Your response must be a valid JSON object with the following structure:
-{
+{{
   "reviews": [
-    {
+    {{
       "hunkIndex": 0,  // 0-based index of the hunk in the diff (matches the 'Hunk X (0-indexed: Y)' header)
       "lineNumber": 1, // 1-based line number within the hunk content (first line after the '@@ ... @@' header)
       "reviewComment": "Your review comment in GitHub Markdown format",
       "confidence": "High" // "High", "Medium", or "Low" based on your certainty and the potential impact
-    },
+    }},
     // Additional review items as needed
   ]
-}
+}}
 
 IMPORTANT NOTES ABOUT LINE NUMBERS:
 - The hunkIndex must be a valid 0-based index within the range of hunks in the diff
@@ -729,7 +772,20 @@ IMPORTANT NOTES ABOUT LINE NUMBERS:
 The response will be automatically structured according to the schema provided in the API configuration.
 """
 
-    pr_context = f"\nPull Request Title: {pr_details.title}\nPull Request Description:\n---\n{pr_details.description or 'No description provided.'}\n---\n"
+    # Contextualize prompt based on event type
+    context_header = ""
+    context_description = ""
+    if review_context.event_type == "pull_request":
+        context_header = f"\nPull Request Title: {review_context.title}\nPull Request Description:\n---\n"
+        context_description = review_context.description or 'No description provided.'
+    elif review_context.event_type == "push":
+        context_header = f"\nCommit Title: {review_context.title}\nCommit Message:\n---\n"
+        context_description = review_context.description or 'No commit message provided.'
+    else: # issue_comment or other
+        context_header = f"\nReview Context Title: {review_context.title}\nReview Context Description:\n---\n"
+        context_description = review_context.description or 'No description provided.'
+
+    review_context_block = f"{context_header}{context_description}\n---\n"
 
     # Add previous review context if available
     previous_review_context = ""
@@ -765,7 +821,7 @@ The response will be automatically structured according to the schema provided i
     diff_to_review_header = f"\nReview the following code diffs for the file \"{patched_file.path}\" ({len(list(patched_file))} hunks):\n"
     diff_block = f"```diff\n{combined_hunks_text}\n```"
 
-    return instructions + pr_context + previous_review_context + file_context_header + file_content_block + diff_to_review_header + diff_block
+    return instructions + review_context_block + previous_review_context + file_context_header + file_content_block + diff_to_review_header + diff_block
 
 
 LAST_GEMINI_REQUEST_TIME = 0
@@ -853,11 +909,7 @@ def improved_calculate_github_position(file_patch: PatchedFile, hunk_idx: int, l
         # Validate line number
         if not (1 <= line_num_in_hunk <= num_lines_in_hunk):
             print(f"Warning: Line number {line_num_in_hunk} is outside the range of hunk content (1-{num_lines_in_hunk})")
-            # Return a special value to indicate invalid position but don't skip the comment
-            return {
-                "invalidPosition": True,
-                "file": file_patch.path
-            }
+            return None
 
         # Calculate position based on hunk position and line number
         position = 0
@@ -952,7 +1004,9 @@ def get_ai_response_with_structured_output(prompt: str, model_name: str, max_ret
 
             enforce_gemini_rate_limits()
             # Only show first 5 chars of key followed by *** for security
-            key_prefix = gemini_key_manager.get_current_key()[:5] if gemini_key_manager.get_current_key() else "None"
+            # Ensure get_current_key() returns a string before slicing
+            current_key_value = gemini_key_manager.get_current_key()
+            key_prefix = current_key_value[:5] if current_key_value else "None"
             print(f"Attempt {attempt}/{max_retries} - Sending prompt to Gemini model {model_name} with structured output using key: {key_prefix}***")
 
             # Generate content with the prompt
@@ -1014,20 +1068,22 @@ def get_ai_response_with_structured_output(prompt: str, model_name: str, max_ret
                 print(f"Detected rate limit error: {e}")
 
                 # Log available keys status (without exposing full keys)
-                available_keys = ["GEMINI_API_KEY"] + [f"GEMINI_ALT_{i}" for i in range(1, 5)]
-                key_status = []
-                for key_name in available_keys:
-                    key_value = gemini_key_manager.get_key_by_name(key_name)
-                    status = "SET" if key_value else "NOT SET"
-                    key_status.append(f"{key_name}: {status}")
+                # Log available keys status (without exposing full keys)
+                key_status_info = []
+                if gemini_key_manager.primary_key:
+                    key_status_info.append(f"GEMINI_API_KEY: {'SET' if gemini_key_manager.primary_key else 'NOT SET'}")
+                if gemini_key_manager.fallback_key:
+                    key_status_info.append(f"GEMINI_FALLBACK_API_KEY: {'SET' if gemini_key_manager.fallback_key else 'NOT SET'}")
 
-                print(f"API key status - {', '.join(key_status)}")
+                print(f"API key status - {', '.join(key_status_info)}")
                 print(f"Currently using: {gemini_key_manager.get_current_key_name()}")
 
                 # Try to rotate to the next available key
                 if gemini_key_manager.rotate_key():
                     # Only show first 5 chars of key followed by *** for security
-                    key_prefix = gemini_key_manager.get_current_key()[:5] if gemini_key_manager.get_current_key() else "None"
+                    # Ensure get_current_key() returns a string before slicing
+                    current_key_value = gemini_key_manager.get_current_key()
+                    key_prefix = current_key_value[:5] if current_key_value else "None"
                     print(f"Rotated to alternative API key {gemini_key_manager.get_current_key_name()}: {key_prefix}***")
                     # Don't increment attempt counter when we rotate keys
                     continue
@@ -1065,7 +1121,7 @@ def get_ai_response_with_retry(prompt: str, max_retries: int = 3) -> List[Dict[s
     return get_ai_response_with_structured_output(prompt, model_name, max_retries)
 
 
-def analyze_code(files_to_review: Iterable[PatchedFile], pr_details: PRDetails) -> List[Dict[str, Any]]:
+def analyze_code(files_to_review: Iterable[PatchedFile], review_context: ReviewContext) -> List[Dict[str, Any]]:
     files_list = list(files_to_review)
     print(f"Starting code analysis for {len(files_list)} files.")
     all_comments_for_pr = []
@@ -1082,7 +1138,7 @@ def analyze_code(files_to_review: Iterable[PatchedFile], pr_details: PRDetails) 
 
         print(f"\nProcessing file: {patched_file.path} with {len(hunks_in_file)} hunks.")
 
-        batch_prompt = create_batch_prompt(patched_file, pr_details)
+        batch_prompt = create_batch_prompt(patched_file, review_context)
         ai_reviews_for_file = get_ai_response_with_retry(batch_prompt)
 
         if ai_reviews_for_file:
@@ -1133,14 +1189,13 @@ def process_batch_ai_reviews(patched_file: PatchedFile, ai_reviews: List[Dict[st
 
             formatted_comment_body = f"**My Confidence: {confidence}**\n\n{comment_text}"
 
-            # Check if we have an invalid position result (dictionary with invalidPosition flag)
-            if isinstance(github_pos_result, dict) and github_pos_result.get("invalidPosition"):
+            # If github_pos_result is None, it means the position couldn't be calculated precisely
+            if github_pos_result is None:
                 # For invalid positions, we'll add a special prefix to the comment
                 formatted_comment_body = (
                     "**Note: I couldn't precisely position this comment in the diff, but I think it's important feedback:**\n\n"
                     f"**My Confidence: {confidence}**\n\n{comment_text}"
                 )
-
                 # Add the comment to the list of comments to post at the file level (position=1)
                 gh_comment = {
                     "body": formatted_comment_body,
@@ -1169,35 +1224,37 @@ def process_batch_ai_reviews(patched_file: PatchedFile, ai_reviews: List[Dict[st
     return comments_for_github
 
 
-def save_review_results_to_json(pr_details: PRDetails, comments: List[Dict[str, Any]], filepath_str: str = "reviews/gemini-pr-review.json") -> str:
+def save_review_results_to_json(review_context: ReviewContext, comments: List[Dict[str, Any]], filepath_str: str = "reviews/gemini-pr-review.json") -> str:
     filepath = Path(filepath_str)
     filepath.parent.mkdir(parents=True, exist_ok=True)
 
     # Get API key info for metadata
     api_key_info = "primary"
-    if gemini_key_manager:
-        if gemini_key_manager.current_key_name != "GEMINI_API_KEY":
-            api_key_info = f"{gemini_key_manager.current_key_name} (rotated due to rate limiting)"
+    rate_limited = False # Default to False
 
+    if gemini_key_manager:
+        if gemini_key_manager.current_key_name == "GEMINI_FALLBACK_API_KEY":
+            api_key_info = "fallback (rotated due to rate limiting)"
         # Check if ALL keys were rate limited (for commit message)
-        # Only set rate_limited to true if all keys failed
         rate_limited = gemini_key_manager.all_keys_rate_limited
-    else:
-        rate_limited = False
 
     review_data = {
         "metadata": {
-            "pr_number": pr_details.pull_number,
-            "repo": pr_details.get_full_repo_name(),
-            "title": pr_details.title,
+            "event_type": review_context.event_type,
+            "repo": review_context.get_full_repo_name(),
+            "title": review_context.title,
             "timestamp_utc": datetime.datetime.now(datetime.timezone.utc).isoformat(),
-            "review_tool": "I'm your Gemini AI Reviewer",
+            "review_tool": "zen-ai-qa",
             "model_used": os.environ.get('GEMINI_MODEL', 'N/A'),
             "api_key_used": api_key_info,
             "rate_limited": rate_limited
         },
         "review_comments": []
     }
+    if review_context.event_type == "pull_request":
+        review_data["metadata"]["pull_number"] = review_context.pull_number
+    elif review_context.event_type == "push":
+        review_data["metadata"]["commit_sha"] = review_context.commit_sha
 
     for gh_comment_dict in comments:
         structured_comment = {
@@ -1350,7 +1407,7 @@ def detect_category(comment_text: str) -> str:
     return "general"
 
 
-def create_review_and_summary_comment(pr_details: PRDetails, comments_for_gh_review: List[Dict[str, Any]], review_json_path: str):
+def create_review_and_summary_comment(review_context: ReviewContext, comments_for_gh_review: List[Dict[str, Any]], review_json_path: str):
     """
     Create a review with comments and a summary comment on the PR.
 
@@ -1359,44 +1416,65 @@ def create_review_and_summary_comment(pr_details: PRDetails, comments_for_gh_rev
         comments_for_gh_review: List of comments to add to the review
         review_json_path: Path to the JSON file containing the review data
     """
-    if not pr_details.pr_obj:
-        logger.error("PR object not available in PRDetails. Cannot create review or comments.")
+    # Determine the target object for comments (PR or Commit)
+    target_obj = None
+    if review_context.event_type == "pull_request" and review_context.pr_obj:
+        target_obj = review_context.pr_obj
+        logger.info(f"Targeting PR #{review_context.pull_number} for comments.")
+    elif review_context.event_type == "push" and review_context.commit_obj:
+        # Ensure repo_obj is not None before calling get_commit
+        if review_context.repo_obj:
+            target_obj = review_context.repo_obj.get_commit(review_context.commit_sha)
+            logger.info(f"Targeting commit {review_context.commit_sha} for comments.")
+        else:
+            logger.error("Repository object not available for push event. Cannot target commit for comments.")
+            return # Exit if repo_obj is None
+    elif review_context.event_type == "issue_comment" and review_context.pr_obj:
+        target_obj = review_context.pr_obj
+        logger.info(f"Targeting PR #{review_context.pull_number} for comments (from issue_comment event).")
+    else:
+        logger.error("No valid target object (PR or Commit) available for comments. Cannot create review or comments.")
         return
 
-    pr = pr_details.pr_obj
     num_suggestions = len(comments_for_gh_review)
 
-    # Check if the global gh client is authenticated with the bot identity
+    # Re-authenticate if necessary for posting comments
+    # This block is similar to the one above, but for comment posting
     try:
         # First try to use the global gh client which should already be authenticated
         if gh and hasattr(gh, '_Github__requester') and hasattr(gh._Github__requester, 'auth'):
-            # Check if we're using the zen-ai-qa bot identity (app_id 1281729)
             auth_header = getattr(gh._Github__requester.auth, 'token', '')
             if auth_header and os.environ.get("ZEN_APP_INSTALLATION_ID"):
                 # We're already authenticated with the bot identity
-                repo = gh.get_repo(pr_details.get_full_repo_name())
-                pr = repo.get_pull(pr_details.pull_number)
-                logger.info(f"Using globally authenticated client with bot identity for PR #{pr_details.pull_number}")
+                if review_context.event_type == "pull_request" and review_context.pr_obj:
+                    repo = gh.get_repo(review_context.get_full_repo_name())
+                    target_obj = repo.get_pull(review_context.pull_number)
+                    logger.info(f"Using globally authenticated client with bot identity for PR #{review_context.pull_number}")
+                elif review_context.event_type == "push" and review_context.commit_obj:
+                    repo = gh.get_repo(review_context.get_full_repo_name())
+                    target_obj = repo.get_commit(review_context.commit_sha)
+                    logger.info(f"Using globally authenticated client with bot identity for commit {review_context.commit_sha}")
             else:
-                # We're authenticated but not with the bot identity, try to re-authenticate
                 logger.info("Global client not authenticated with bot identity, attempting to use bot credentials")
-                # Create a new authenticator instance for this request
                 review_auth = GitHubAuthenticator()
                 github_client, token = review_auth.authenticate()
 
                 if github_client and token:
-                    # Create a new PR object with the authenticated client
-                    repo = github_client.get_repo(pr_details.get_full_repo_name())
-                    pr = repo.get_pull(pr_details.pull_number)
-                    logger.info(f"Successfully authenticated with bot identity for PR #{pr_details.pull_number}")
+                    if review_context.event_type == "pull_request" and review_context.pr_obj:
+                        repo = github_client.get_repo(review_context.get_full_repo_name())
+                        target_obj = repo.get_pull(review_context.pull_number)
+                        logger.info(f"Successfully authenticated with bot identity for PR #{review_context.pull_number}")
+                    elif review_context.event_type == "push" and review_context.commit_obj:
+                        repo = github_client.get_repo(review_context.get_full_repo_name())
+                        target_obj = repo.get_commit(review_context.commit_sha)
+                        logger.info(f"Successfully authenticated with bot identity for commit {review_context.commit_sha}")
                 else:
-                    logger.warning("Bot authentication failed. Using original PR object.")
+                    logger.warning("Bot authentication failed. Using original target object.")
         else:
-            # Global client not properly initialized, fall back to original PR object
-            logger.warning("Global GitHub client not properly initialized. Using original PR object.")
+            logger.warning("Global GitHub client not properly initialized. Using original target object.")
     except Exception as auth_error:
-        logger.error(f"Error during GitHub authentication: {auth_error}")
-        logger.warning("Falling back to original PR object due to error.")
+        logger.error(f"Error during GitHub authentication for comments: {auth_error}")
+        logger.warning("Falling back to original target object due to error.")
 
     # Process and post review comments
     if num_suggestions > 0:
@@ -1415,38 +1493,82 @@ def create_review_and_summary_comment(pr_details: PRDetails, comments_for_gh_rev
                 logger.warning(f"Skipping malformed comment due to missing keys: {c}")
 
         if valid_review_comments:
-            try:
-                logger.info(f"Creating a PR review with {len(valid_review_comments)} suggestions.")
-                pr.create_review(
-                    body="I've reviewed your code and have some suggestions:",
-                    event="COMMENT",
-                    comments=valid_review_comments
-                )
-                logger.info("Successfully created PR review with suggestions.")
-            except GithubException as e:
-                logger.error(f"Error creating PR review: {e}. Status: {e.status}, Data: {e.data}")
-                logger.warning("Falling back to posting individual issue comments for suggestions.")
+            if review_context.event_type == "pull_request" and review_context.pr_obj:
+                try:
+                    logger.info(f"Creating a PR review with {len(valid_review_comments)} suggestions.")
+                    target_obj.create_review(
+                        body="I've reviewed your code and have some suggestions:",
+                        event="COMMENT",
+                        comments=valid_review_comments
+                    )
+                    logger.info("Successfully created PR review with suggestions.")
+                except GithubException as e:
+                    logger.error("Error creating PR review: %s (Status: %s, Data: %s)", e, getattr(e, 'status', 'N/A'), getattr(e, 'data', 'N/A'), exc_info=True)
+                    logger.warning("Falling back to posting individual issue comments for suggestions.")
+                    for c_item in valid_review_comments:
+                        try:
+                            # For PRs, issue comments are tied to the PR number
+                            target_obj.create_issue_comment(f"I found an issue in **File:** `{c_item['path']}` (at diff position {c_item['position']})\n\n{c_item['body']}")
+                        except Exception as ie:
+                            logger.error("Error posting individual suggestion as issue comment: %s", ie, exc_info=True)
+                except Exception as e:
+                    logger.error("Unexpected error during PR review creation: %s", e, exc_info=True)
+                    traceback.print_exc()
+            elif review_context.event_type == "push" and review_context.commit_obj:
+                # For push events, comments are posted directly on the commit
+                logger.info(f"Creating {len(valid_review_comments)} comments on commit {review_context.commit_sha}.")
                 for c_item in valid_review_comments:
                     try:
-                        pr.create_issue_comment(f"I found an issue in **File:** `{c_item['path']}` (at diff position {c_item['position']})\n\n{c_item['body']}")
-                    except Exception as ie:
-                        logger.error(f"Error posting individual suggestion as issue comment: {ie}")
-            except Exception as e:
-                logger.error(f"Unexpected error during PR review creation: {e}")
-                traceback.print_exc()
+                        # Commit comments require path, position, and commit_id
+                        # The 'position' here is the position in the diff, which needs to be calculated
+                        # relative to the target commit.
+                        # For now, we'll simplify and post as general commit comments if direct diff comment is complex.
+                        # GitHub API for commit comments: POST /repos/{owner}/{repo}/commits/{commit_sha}/comments
+                        # This requires `path` and `position` relative to the diff of that commit.
+                        # The `position` from our `improved_calculate_github_position` is for PR diffs.
+                        # For simplicity, we'll post general comments on the commit, or if we want file-specific,
+                        # we can try `create_comment` on the commit object.
+                        # The `position` parameter for `create_comment` on a commit refers to the line number in the *file*,
+                        # not the diff position. This is a key difference.
+                        # For now, let's post as a general comment on the commit, mentioning the file and diff position.
+                        target_obj.create_comment(
+                            body=f"I found an issue in **File:** `{c_item['path']}` (at diff position {c_item['position']})\n\n{c_item['body']}",
+                            path=c_item['path'], # Path relative to the repository root
+                            position=c_item['position'], # Line number in the file (not diff position)
+                            commit_id=review_context.commit_sha
+                        )
+                        logger.info(f"Posted comment on commit {review_context.commit_sha} for file {c_item['path']}.")
+                    except GithubException as e:
+                        logger.error("Error posting commit comment for %s: %s (Status: %s, Data: %s)", c_item['path'], e, getattr(e, 'status', 'N/A'), getattr(e, 'data', 'N/A'), exc_info=True)
+                    except Exception as e:
+                        logger.error("Unexpected error posting commit comment for %s: %s", c_item['path'], e, exc_info=True)
+                        traceback.print_exc()
+            else:
+                logger.warning("No validly structured comments to create a review with.")
         else:
-            logger.warning("No validly structured comments to create a review with.")
-    else:
-        logger.info("No suggestions to create a PR review for.")
+            logger.info("No suggestions to create a review for.")
 
     # Prepare summary comment with links to review file
-    repo_full_name = os.environ.get("GITHUB_REPOSITORY", pr_details.get_full_repo_name())
+    repo_full_name = os.environ.get("GITHUB_REPOSITORY", review_context.get_full_repo_name())
     server_url = os.environ.get("GITHUB_SERVER_URL", "https://github.com")
-    branch_name = os.environ.get("GITHUB_HEAD_REF")
-    if not branch_name and hasattr(pr.head, 'ref'):
-        branch_name = pr.head.ref
-
+    
     review_file_url_md = f"Review JSON file (`{review_json_path}` in the repository)"
+    
+    # Determine the branch name for the URL based on event type
+    branch_name = None
+    if review_context.event_type == "pull_request" and review_context.pr_obj:
+        branch_name = review_context.pr_obj.head.ref
+    elif review_context.event_type == "push":
+        # For push events, the branch name is available in GITHUB_REF
+        # GITHUB_REF for a push to main will be 'refs/heads/main'
+        github_ref = os.environ.get("GITHUB_REF")
+        if github_ref and github_ref.startswith("refs/heads/"):
+            branch_name = github_ref.replace("refs/heads/", "")
+        elif github_ref and github_ref.startswith("refs/tags/"):
+            # For tags, we might not want to link to a branch, or link to the commit SHA directly
+            logger.warning(f"Push event was for a tag: {github_ref}. Cannot form branch URL.")
+            branch_name = None # Do not form a branch URL
+    
     if branch_name:
         try:
             encoded_branch = urllib.parse.quote_plus(branch_name)
@@ -1456,7 +1578,7 @@ def create_review_and_summary_comment(pr_details: PRDetails, comments_for_gh_rev
         except Exception as url_e:
             logger.error(f"Error creating review file URL: {url_e}")
     else:
-        logger.warning("Could not determine branch name for summary comment URL.")
+        logger.warning("Could not determine branch name for summary comment URL. Link will be generic.")
 
     # Create summary body with categorized findings
     summary_body = f"✨ **I've completed my code review!** ✨\n\n"
@@ -1513,19 +1635,17 @@ def create_review_and_summary_comment(pr_details: PRDetails, comments_for_gh_rev
     fallback_key_note = ""
 
     if gemini_key_manager:
-        if gemini_key_manager.current_key_name != "GEMINI_API_KEY":
-            api_key_info = "alternative (rotated due to rate limiting)"
-
+        if gemini_key_manager.current_key_name == "GEMINI_FALLBACK_API_KEY":
+            api_key_info = "fallback (rotated due to rate limiting)"
+        
         # Add note about fallback key usage if applicable
         if gemini_key_manager.used_fallback_key:
-            fallback_key_note = f"- **Note:** I encountered rate limiting with the primary API key, but I was able to use a fallback key successfully.\n"
+            fallback_key_note = "- **Note:** I encountered rate limiting with the primary API key, but I was able to use the fallback key successfully.\n"
 
         # Add warning only if ALL keys were rate limited and got no results
         if gemini_key_manager.all_keys_rate_limited and num_suggestions == 0:
             rate_limit_warning = "\n\n⚠️ **Warning: I encountered rate limiting with ALL my API keys during this review.** My review may be incomplete or missing suggestions due to API quota limitations."
 
-    summary_body += f"- API key used: {api_key_info}\n"
-    summary_body += fallback_key_note
     summary_body += f"- My review focused on: Logic flaws, runtime behavior issues, and code quality\n"
     summary_body += f"- To mark my comments as resolved: Add `[ADDRESSED]` to the comment in the JSON file, followed by `**Resolution**: your explanation`\n"
 
@@ -1543,13 +1663,23 @@ def create_review_and_summary_comment(pr_details: PRDetails, comments_for_gh_rev
 
     # Post the summary comment
     try:
-        # Use the PR object that was potentially updated with GitHub App authentication
-        pr.create_issue_comment(summary_body)
-        logger.info("Successfully created summary comment on PR.")
-    except GithubException as e:
-        logger.error(f"Error creating summary PR comment: {e}")
+        if target_obj:
+            if review_context.event_type == "pull_request" or review_context.event_type == "issue_comment":
+                try:
+                    target_obj.create_issue_comment(summary_body)
+                    logger.info("Successfully created summary comment on PR/Issue.")
+                except GithubException as e:
+                    logger.error("Error creating summary comment on PR/Issue: %s (Status: %s, Data: %s)", e, getattr(e, 'status', 'N/A'), getattr(e, 'data', 'N/A'), exc_info=True)
+                except Exception as e:
+                    logger.error("Unexpected error creating summary comment on PR/Issue: %s", e, exc_info=True)
+                    traceback.print_exc()
+            elif review_context.event_type == "push":
+                logger.warning("Summary comments are not directly supported for bare commits via create_issue_comment. Skipping summary comment.")
+                # The review results are still saved to the JSON file.
+        else:
+            logger.error("Cannot post summary comment: No valid target object (PR or Commit) available.")
     except Exception as e:
-        logger.error(f"Unexpected error creating summary PR comment: {e}")
+        logger.error("Unhandled error during summary comment posting: %s", e, exc_info=True)
         traceback.print_exc()
 
 
@@ -1592,54 +1722,105 @@ def main():
         raise ValueError("GitHub or Gemini client not available")
 
     try:
-        # Get PR details
-        pr_details = get_pr_details()
-        logger.info(f"Processing PR #{pr_details.pull_number} in repo {pr_details.get_full_repo_name()} (Event: {pr_details.event_type})")
+        # Get review context
+        review_context = get_review_context()
+        logger.info(f"Processing event of type: {review_context.event_type} in repo {review_context.get_full_repo_name()}")
 
-        # Determine what to review based on event type
-        last_run_sha_from_env = os.environ.get("LAST_RUN_SHA", "").strip()
-        head_sha = pr_details.pr_obj.head.sha
-        base_sha = pr_details.pr_obj.base.sha
-
+        diff_text = ""
         comparison_sha_for_diff = None
-        if pr_details.event_type in ["opened", "reopened"]:
-            comparison_sha_for_diff = base_sha
-            logger.info(f"Event type is '{pr_details.event_type}'. Reviewing full PR against base SHA: {comparison_sha_for_diff}")
-        elif pr_details.event_type == "synchronize":
-            if last_run_sha_from_env and last_run_sha_from_env != head_sha:
-                comparison_sha_for_diff = last_run_sha_from_env
-                logger.info(f"Event type is 'synchronize'. Reviewing changes since last run SHA: {comparison_sha_for_diff}")
+        head_sha = None
+        base_sha = None
+        
+        if review_context.event_type == "pull_request":
+            head_sha = review_context.pr_obj.head.sha if review_context.pr_obj and review_context.pr_obj.head else None
+            base_sha = review_context.pr_obj.base.sha if review_context.pr_obj and review_context.pr_obj.base else None
+            
+            last_run_sha_from_env = os.environ.get("LAST_RUN_SHA", "").strip()
+
+            if review_context.event_type in ["opened", "reopened"]:
+                comparison_sha_for_diff = base_sha
+                logger.info(f"Event type is '{review_context.event_type}'. Reviewing full PR against base SHA: {comparison_sha_for_diff}")
+            elif review_context.event_type == "synchronize":
+                if last_run_sha_from_env and last_run_sha_from_env != head_sha:
+                    comparison_sha_for_diff = last_run_sha_from_env
+                    logger.info(f"Event type is 'synchronize'. Reviewing changes since last run SHA: {comparison_sha_for_diff}")
+                else:
+                    comparison_sha_for_diff = base_sha
+                    if not last_run_sha_from_env:
+                        logger.info(f"Event type is 'synchronize', but no last_run_sha found. Reviewing full PR against base SHA: {comparison_sha_for_diff}")
+                    elif last_run_sha_from_env == head_sha:
+                        logger.info(f"Event type is 'synchronize', but last_run_sha ({last_run_sha_from_env}) is same as head_sha. No new commits for incremental review. Defaulting to full review against base SHA: {comparison_sha_for_diff}.")
             else:
                 comparison_sha_for_diff = base_sha
-                if not last_run_sha_from_env:
-                    logger.info(f"Event type is 'synchronize', but no last_run_sha found. Reviewing full PR against base SHA: {comparison_sha_for_diff}")
-                elif last_run_sha_from_env == head_sha:
-                    logger.info(f"Event type is 'synchronize', but last_run_sha ({last_run_sha_from_env}) is same as head_sha. No new commits for incremental review. Defaulting to full review against base SHA: {comparison_sha_for_diff}.")
-        else:
-            comparison_sha_for_diff = base_sha
-            logger.info(f"Event type is '{pr_details.event_type}'. Defaulting to full review against base SHA: {comparison_sha_for_diff}")
+                logger.info(f"Event type is '{review_context.event_type}'. Defaulting to full review against base SHA: {comparison_sha_for_diff}")
 
-        # Check if there are any changes to review
-        if head_sha == comparison_sha_for_diff:
-            logger.info(f"HEAD SHA ({head_sha}) is the same as comparison SHA ({comparison_sha_for_diff}). No new changes to diff.")
-            save_review_results_to_json(pr_details, [], "reviews/gemini-pr-review.json")
-            create_review_and_summary_comment(pr_details, [], "reviews/gemini-pr-review.json")
-            logger.info("Exiting as there are no new changes to review based on SHAs.")
-            return
+            if head_sha == comparison_sha_for_diff:
+                logger.info(f"HEAD SHA ({head_sha}) is the same as comparison SHA ({comparison_sha_for_diff}). No new changes to diff.")
+                save_review_results_to_json(review_context, [], "reviews/gemini-pr-review.json")
+                create_review_and_summary_comment(review_context, [], "reviews/gemini-pr-review.json")
+                logger.info("Exiting as there are no new changes to review based on SHAs.")
+                return
 
-        # Get the diff
-        diff_text = get_diff(pr_details, comparison_sha_for_diff)
+            diff_text = get_diff(review_context, comparison_sha_for_diff)
+
+        elif review_context.event_type == "push":
+            head_sha = review_context.commit_sha
+            commit_review_filepath = "reviews/gemini-commit-review.json"
+            last_reviewed_commit_sha = None
+
+            # Attempt to load last reviewed commit SHA from the review file
+            previous_commit_review_data = load_previous_review_data(filepath_str=commit_review_filepath)
+            if previous_commit_review_data and "metadata" in previous_commit_review_data and \
+               "commit_sha" in previous_commit_review_data["metadata"]:
+                last_reviewed_commit_sha = previous_commit_review_data["metadata"]["commit_sha"]
+                logger.info(f"Last reviewed commit SHA from {commit_review_filepath}: {last_reviewed_commit_sha}")
+
+            if last_reviewed_commit_sha and last_reviewed_commit_sha != head_sha:
+                comparison_sha_for_diff = last_reviewed_commit_sha
+                logger.info(f"Event type is 'push'. Reviewing new commits from {last_reviewed_commit_sha} to {head_sha}.")
+                diff_text = get_diff(review_context, comparison_sha_for_diff)
+            elif review_context.commit_obj and review_context.commit_obj.parents:
+                comparison_sha_for_diff = review_context.commit_obj.parents[0].sha
+                logger.info(f"Event type is 'push'. No previous commit SHA or same as head. Reviewing commit {head_sha} against parent {comparison_sha_for_diff}.")
+                diff_text = get_diff(review_context, comparison_sha_for_diff)
+            else:
+                logger.warning(f"Push event for commit {head_sha} has no parent and no previous commit SHA to compare against. No diff to review.")
+                save_review_results_to_json(review_context, [], commit_review_filepath)
+                create_review_and_summary_comment(review_context, [], commit_review_filepath)
+                return
+
+            # If diff_text is still empty after trying all comparisons, exit
+            if not diff_text:
+                logger.warning("No diff content retrieved for push event. Exiting review process.")
+                save_review_results_to_json(review_context, [], commit_review_filepath)
+                create_review_and_summary_comment(review_context, [], commit_review_filepath)
+                return
+
+        elif review_context.event_type == "issue_comment":
+            # For issue_comment events, we assume it's on a PR and re-review the PR
+            if review_context.pr_obj:
+                head_sha = review_context.pr_obj.head.sha
+                base_sha = review_context.pr_obj.base.sha
+                comparison_sha_for_diff = base_sha # Always review full PR on issue_comment
+                logger.info(f"Event type is 'issue_comment' on PR #{review_context.pull_number}. Re-reviewing full PR against base SHA: {comparison_sha_for_diff}")
+                diff_text = get_diff(review_context, comparison_sha_for_diff)
+            else:
+                logger.warning("Issue comment event not linked to a PR. No diff to review.")
+                return
+        
         if not diff_text:
             logger.warning("No diff content retrieved. Exiting review process.")
-            save_review_results_to_json(pr_details, [], "reviews/gemini-pr-review.json")
-            create_review_and_summary_comment(pr_details, [], "reviews/gemini-pr-review.json")
+            review_file_path = "reviews/gemini-pr-review.json" if review_context.event_type == "pull_request" else "reviews/gemini-commit-review.json"
+            save_review_results_to_json(review_context, [], review_file_path)
+            create_review_and_summary_comment(review_context, [], review_file_path)
             return
 
         # Parse the diff
         initial_patch_set = parse_diff_to_patchset(diff_text)
         if not initial_patch_set:
             logger.error("Failed to parse diff into PatchSet. Exiting.")
-            save_review_results_to_json(pr_details, [], "reviews/gemini-pr-review.json")
+            review_file_path = "reviews/gemini-pr-review.json" if review_context.event_type == "pull_request" else "reviews/gemini-commit-review.json"
+            save_review_results_to_json(review_context, [], review_file_path)
             raise ValueError("Failed to parse diff into PatchSet")
 
         # Filter files to analyze
@@ -1671,26 +1852,27 @@ def main():
 
         if num_files_to_analyze == 0:
             logger.warning("No files to analyze after applying exclusion patterns.")
-            save_review_results_to_json(pr_details, [], "reviews/gemini-pr-review.json")
-            create_review_and_summary_comment(pr_details, [], "reviews/gemini-pr-review.json")
+            review_file_path = "reviews/gemini-pr-review.json" if review_context.event_type == "pull_request" else "reviews/gemini-commit-review.json"
+            save_review_results_to_json(review_context, [], review_file_path)
+            create_review_and_summary_comment(review_context, [], review_file_path)
             return
 
         # Analyze the code
-        comments_for_gh_review_api = analyze_code(actual_files_to_process, pr_details)
+        comments_for_gh_review_api = analyze_code(actual_files_to_process, review_context)
 
         # Save review results and create comments
-        review_json_filepath = "reviews/gemini-pr-review.json"
-        save_review_results_to_json(pr_details, comments_for_gh_review_api, review_json_filepath)
-        create_review_and_summary_comment(pr_details, comments_for_gh_review_api, review_json_filepath)
+        review_json_filepath = "reviews/gemini-pr-review.json" if review_context.event_type == "pull_request" else "reviews/gemini-commit-review.json"
+        save_review_results_to_json(review_context, comments_for_gh_review_api, review_json_filepath)
+        create_review_and_summary_comment(review_context, comments_for_gh_review_api, review_json_filepath)
 
         logger.info("AI Code Review Script finished successfully.")
     except ValueError as e:
         # Expected errors that we've explicitly raised
-        logger.error(f"Error in main process: {str(e)}")
+        logger.error("Error in main process: %s", e, exc_info=True)
         # We don't re-raise here as we want to handle these gracefully
     except Exception as e:
         # Unexpected errors
-        logger.error(f"Unexpected error in main process: {str(e)}")
+        logger.error("Unexpected error in main process: %s", e, exc_info=True)
         traceback.print_exc()
         # We don't re-raise here to avoid abrupt termination
 
@@ -1703,22 +1885,23 @@ if __name__ == "__main__":
         raise
     except Exception as e:
         # Catch any unhandled exceptions that weren't caught in main()
-        logger.critical(f"Unhandled exception in __main__: {type(e).__name__} - {e}")
+        logger.critical("Unhandled exception in __main__: %s - %s", type(e).__name__, e, exc_info=True)
         traceback.print_exc()
 
         # Create an empty review file to avoid workflow failures
         try:
-            # Get PR details if possible
+            # Get review context if possible
             try:
-                pr_details = get_pr_details()
-                save_review_results_to_json(pr_details, [], "reviews/gemini-pr-review.json")
+                review_context = get_review_context()
+                review_file_path = "reviews/gemini-pr-review.json" if review_context.event_type == "pull_request" else "reviews/gemini-commit-review.json"
+                save_review_results_to_json(review_context, [], review_file_path)
             except Exception:
-                # If we can't get PR details, create a minimal review file
+                # If we can't get review context, create a minimal review file
                 os.makedirs("reviews", exist_ok=True)
-                with open("reviews/gemini-pr-review.json", "w") as f:
+                with open("reviews/gemini-pr-review.json", "w") as f: # Default to PR review file
                     json.dump({"metadata": {"error": str(e)}, "review_comments": []}, f)
         except Exception as file_error:
-            logger.critical(f"Failed to create empty review file: {file_error}")
+            logger.critical("Failed to create empty review file: %s", file_error, exc_info=True)
 
         # Exit with error code
         sys.exit(1)

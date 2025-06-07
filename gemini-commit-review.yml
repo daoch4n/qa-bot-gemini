@@ -1,32 +1,38 @@
-name: AI Code Review
+name: AI Commit Review
 
 on:
-  pull_request:
-    types: [opened, synchronize]  # Trigger on PR creation and updates
+  push:
+    branches:
+      - master
+    paths-ignore:
+      - 'docs/**'
+      - '*.md'
 
 permissions:
   contents: write       # For committing review.json and auto-formatting/linting
-  pull-requests: write  # For creating reviews and comments
+  # pull-requests: write  # Not needed for commit reviews directly
 
 jobs:
   gemini-code-review:
+    if: github.actor != 'zen-ai-qa[bot]'
     runs-on: ubuntu-latest
     steps:
-      - name: 📊 PR Info
+      - name: 📊 Commit Info
         env:
-          PR_NUMBER: ${{ github.event.pull_request.number }}
+          COMMIT_SHA: ${{ github.sha }}
+          BEFORE_SHA: ${{ github.event.before }}
           REPO: ${{ github.repository }}
         run: |
-          echo "Pull Request Number: $PR_NUMBER"
+          echo "Commit SHA: $COMMIT_SHA"
+          echo "Previous Commit SHA (before push): $BEFORE_SHA"
           echo "Repository: $REPO"
-          echo "Event type: ${{ github.event.action }}"
-          echo "PR Head SHA: ${{ github.event.pull_request.head.sha }}"
-          echo "PR Base SHA: ${{ github.event.pull_request.base.sha }}"
+          echo "Event type: ${{ github.event_name }}"
+          echo "Ref: ${{ github.ref }}"
 
       - name: 👀 Checkout Repo
         uses: actions/checkout@v4
         with:
-          fetch-depth: 0 # Needed for diffing against base SHA
+          fetch-depth: 0 # Needed for diffing against base SHA (if comparing to a previous state)
 
       - name: 🐍 Set up Python and Install Dependencies
         uses: actions/setup-python@v5
@@ -56,14 +62,11 @@ jobs:
             done
 
             echo "\nStep 2: Checking for AST parsing issues (e.g., f-string errors)"
-            # Reset errors for this step if you want to count them separately, or use a different counter
             ast_errors=0
             ast_summary=""
             for file in $py_files_to_check; do
               echo "Checking $file with ast.parse"
               if ! python -c "import ast; ast.parse(open('$file', encoding='utf-8').read())" 2>&1 >/dev/null; then
-                 # Check if py_compile already flagged this file to avoid redundant general error messages
-                 # This is a heuristic, ast.parse might catch different things.
                  if ! grep -q "$file (py_compile syntax error)" <<< "$summary"; then
                     ast_errors=$((ast_errors+1))
                     ast_summary+="$file (AST parsing error, e.g., f-string):\nPython's AST parser failed. Check syntax, especially f-strings.\n\n"
@@ -83,7 +86,6 @@ jobs:
               echo "Running flake8 on $file"
               output=$(flake8 --select=E9,F821 "$file" 2>&1)
               if [ -n "$output" ]; then
-                # Check if similar errors already reported to avoid too much noise
                 if ! grep -q "$file" <<< "$summary"; then # Simple check
                     flake8_errors=$((flake8_errors+1))
                     flake8_summary+="$file (flake8 critical errors E9/F821):\n$output\n\n"
@@ -114,7 +116,7 @@ jobs:
             echo "Error: GEMINI_API_KEY_SECRET is empty." >&2
             exit 1
           fi
-          # Parse JSON array into newline-separated 
+          # Parse JSON array into newline-separated
           API_KEYS_NEWLINE_SEPARATED=$(jq -e -r '.[]' <<< "$GEMINI_API_KEY_SECRET")
           JQ_EXIT_CODE=$?
           if [ $JQ_EXIT_CODE -ne 0 ]; then
@@ -145,21 +147,24 @@ jobs:
           fi
           echo "gemini_main_key=${SELECTED_KEYS[0]}" >> $GITHUB_OUTPUT
           echo "gemini_fallback_key=${SELECTED_KEYS[1]}" >> $GITHUB_OUTPUT
-          echo "Selected keys for review."
+
       - name: 🧠 Run code review
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
           GEMINI_API_KEY: ${{ steps.prepare_gemini_keys.outputs.gemini_main_key }}
           GEMINI_FALLBACK_API_KEY: ${{ steps.prepare_gemini_keys.outputs.gemini_fallback_key }}
           GEMINI_MODEL: gemini-2.5-flash-preview-05-20
-          INPUT_EXCLUDE: "*.md,*.txt,*.json,*.lock,*.yml,*.yaml,*.svg,*.png,*.jpg,*.jpeg,*.gif,*.ico,*.woff,*.woff2,*.ttf,*.eot,*.otf,*.map,*.min.js,*.min.css,reviews/gemini-pr-review.json,*.test.js,*.d.ts,vendor/**,node_modules/**,dist/**,build/**"
+          # Updated exclude list to reflect the new review JSON file name
+          INPUT_EXCLUDE: "*.md,*.txt,*.json,*.lock,*.yml,*.yaml,*.svg,*.png,*.jpg,*.jpeg,*.gif,*.ico,*.woff,*.woff2,*.ttf,*.eot,*.otf,*.map,*.min.js,*.min.css,reviews/gemini-commit-review.json,*.test.js,*.d.ts,vendor/**,node_modules/**,dist/**,build/**"
           GITHUB_EVENT_PATH: ${{ github.event_path }}
           GITHUB_EVENT_NAME: ${{ github.event_name }}
           GITHUB_REPOSITORY: ${{ github.repository }}
           GITHUB_SERVER_URL: ${{ github.server_url }}
-          GITHUB_HEAD_REF: ${{ github.head_ref }}
+          # GITHUB_HEAD_REF is for PRs, not relevant for push events
+          # GITHUB_HEAD_REF: ${{ github.head_ref }}
           GITHUB_RUN_ID: ${{ github.run_id }}
           GITHUB_JOB: ${{ github.job }}
+          # GitHub App authentication
           ZEN_APP_INSTALLATION_ID: ${{ secrets.ZEN_APP_INSTALLATION_ID }}
           ZEN_APP_PRIVATE_KEY: ${{ secrets.ZEN_APP_PRIVATE_KEY }}
         run: |
@@ -179,14 +184,27 @@ jobs:
                 sleep $sleep_time
               else
                 echo "All attempts for code review script failed."
-                # Allow workflow to continue to commit review.json even if script failed
                 echo "Continuing workflow despite script failure after retries to commit artifacts."
               fi
             fi
             attempt=$((attempt + 1))
           done
 
-      - name: 💾 Commit review artifacts (review JSON)
+      - name: 🔢 Get Issue Count
+        id: get_issue_count
+        run: |
+          # Ensure jq is installed (it usually is on ubuntu-latest)
+          if ! command -v jq &> /dev/null; then
+              echo "jq not found, installing..."
+              sudo apt-get update && sudo apt-get install -y jq
+          fi
+          
+          # Read the review JSON and count issues
+          issue_count=$(jq '.review_comments | length' reviews/gemini-commit-review.json)
+          echo "Detected $issue_count issues."
+          echo "issue_count=$issue_count" >> $GITHUB_OUTPUT
+
+      - name: � Commit review artifacts (review JSON)
         run: |
           export GIT_AUTHOR_NAME="zen-ai-qa[bot]"
           export GIT_AUTHOR_EMAIL="211895442+zen-ai-qa[bot]@users.noreply.github.com"
@@ -194,40 +212,29 @@ jobs:
           export GIT_COMMITTER_EMAIL="211895442+zen-ai-qa[bot]@users.noreply.github.com"
 
           # Add the JSON files
+          # Changed to gemini-commit-review.json
           git add reviews/*.json 2>/dev/null || true
 
           if git diff --staged --quiet --exit-code; then
             echo "No changes to review artifacts to commit."
           else
-            # Use different commit messages based on whether there are comments or rate limiting
-            # Check if rate limiting was encountered
-            if [ -f "reviews/gemini-pr-review.json" ]; then
-              review_comments_count=$(jq '.review_comments | length' reviews/gemini-pr-review.json)
-              rate_limited=$(jq '.metadata.rate_limited' reviews/gemini-pr-review.json)
-
-              if [ "$review_comments_count" -gt 0 ]; then
-                if [ "$rate_limited" = "true" ]; then
-                  commit_message="👁️‍🗨️ Update Gemini PR review with $review_comments_count issues (rate limited)"
-                else
-                  commit_message="👁️‍🗨️ Update Gemini PR review with $review_comments_count issues"
-                fi
-              else
-                if [ "$rate_limited" = "true" ]; then
-                  commit_message="👁️‍🗨️ Update Gemini PR review (no issues found, rate limited)"
-                else
-                  commit_message="👁️‍🗨️ Update Gemini PR review (no issues found)"
-                fi
-              fi
+            # For commit reviews, simplify the commit message
+            issue_count_val="${{ steps.get_issue_count.outputs.issue_count }}"
+            if [ "$issue_count_val" -eq 0 ]; then
+              commit_message="✅ No issues found since last push"
+            elif [ "$issue_count_val" -eq 1 ]; then
+              commit_message="⚠️ Found 1 issue since last push"
             else
-              commit_message="📊 Update review reports"
+              commit_message="⚠️ Found $issue_count_val issues since last push"
             fi
+            echo "Generated commit message: $commit_message"
 
             git commit -m "$commit_message"
 
-            # Push to the PR branch. Retry push a few times in case of temporary conflict.
+            # Push to the current branch.
             for i in 1 2 3; do
-              git pull --rebase origin ${{ github.event.pull_request.head.ref }} || true # Try to rebase before push
-              if git push origin HEAD:${{ github.event.pull_request.head.ref }}; then
+              git pull --rebase origin ${{ github.ref }} || true # Try to rebase before push
+              if git push origin HEAD:${{ github.ref }}; then
                 echo "Push of review artifacts succeeded."
                 break
               fi
