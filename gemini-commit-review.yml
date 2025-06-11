@@ -3,9 +3,7 @@ name: AI Commit Review
 on:
   push:
     branches:
-      - js
-    paths:
-      - 'app/**'
+      - main
 
 permissions:
   contents: write       # For committing review.json and auto-formatting/linting
