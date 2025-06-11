@@ -3,10 +3,9 @@ name: AI Commit Review
 on:
   push:
     branches:
-      - master
-    paths-ignore:
-      - 'docs/**'
-      - '*.md'
+      - js
+    paths:
+      - 'app/**'
 
 permissions:
   contents: write       # For committing review.json and auto-formatting/linting
@@ -151,8 +150,8 @@ jobs:
       - name: 🧠 Run code review
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-          GEMINI_API_KEY: ${{ steps.prepare_gemini_keys.outputs.gemini_main_key }}
-          GEMINI_FALLBACK_API_KEY: ${{ steps.prepare_gemini_keys.outputs.gemini_fallback_key }}
+          GEMINI_API_KEY: ${{ steps.prepare_api.outputs.gemini_main_key }}
+          GEMINI_FALLBACK_API_KEY: ${{ steps.prepare_api.outputs.gemini_fallback_key }}
           GEMINI_MODEL: gemini-2.5-flash-preview-05-20
           # Updated exclude list to reflect the new review JSON file name
           INPUT_EXCLUDE: "*.md,*.txt,*.json,*.lock,*.yml,*.yaml,*.svg,*.png,*.jpg,*.jpeg,*.gif,*.ico,*.woff,*.woff2,*.ttf,*.eot,*.otf,*.map,*.min.js,*.min.css,reviews/gemini-commit-review.json,*.test.js,*.d.ts,vendor/**,node_modules/**,dist/**,build/**"
