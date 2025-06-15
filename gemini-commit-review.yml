@@ -3,9 +3,7 @@ name: AI Commit Review
 on:
   push:
     branches:
-      - js
-    paths:
-      - 'app/**'
+      - main
 
 permissions:
   contents: write       # For committing review.json and auto-formatting/linting
@@ -13,7 +11,7 @@ permissions:
 
 jobs:
   gemini-code-review:
-    if: github.actor != 'zen-ai-qa[bot]' && github.actor != 'zen-ai-devops[bot]'
+    if: github.actor != 'zen-ai-qa[bot]'
     runs-on: ubuntu-latest
     steps:
       - name: 📊 Commit Info
