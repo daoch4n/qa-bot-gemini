@@ -14,14 +14,11 @@
 - For pushes to main branch, detailed review feedback since last push will be auto-commited to your repo `/reviews/` folder (separate from PR feedback)
 - For Pull Requests, detailed review feedback will be commented on completion with `Resolve conversation` button <br> along with AI-actionable JSON report (in two formats) <br> auto-commited by cute white robot to your repo `/reviews/` folder (separate from main branch commits feedback)
 ### (Optional) <br> If you also want it to comment as cute white robot:
-- Install [cute white robot](https://github.com/apps/zen-ai-qa) on your acc or repo
+- Make you own app in Developer settings and use its installation ID and key! 🗝️
 - From repo page on Github go to `Settings` -> `Secrets and variables` -> `Actions`
   - Click `New repository secret`
-    - Set `ZEN_DEVOPS_APP_INSTALLATION_ID` with the installation ID <br> (you can find installation ID in url of app settings page after you install app)
-    - Set `ZEN_DEVOPS_APP_PRIVATE_KEY` <br> (mailto:daoch4n@gmail.com) (autokeygen is coming)
-- Or make you own app in Developer settings and use its installation ID and key! 🗝️
-
-### See it in action 🪄 : [dtub/DaokoTube](https://github.com/dtub/DaokoTube/pulls?q=is%3Apr+is%3Aclosed)
+    - Set `ZEN_APP_INSTALLATION_ID` with the installation ID <br> (you can find installation ID in url of app settings page (the one that displays after you install app, not the one you generate private key on))
+    - Set `ZEN_APP_PRIVATE_KEY` with your app private key generated in [app settings](https://github.com/settings/apps/)
 
 Inspired by [truongnh1992/gemini-ai-code-reviewer](https://github.com/truongnh1992/gemini-ai-code-reviewer)
 <br><br>
