@@ -1,5 +1,5 @@
-# qa-gemini-action ✨
-<img src="https://github.com/user-attachments/assets/7e1493ad-31da-448d-8050-e2072c916500" alt="cute transparent robot" width="333">
+# 👁️‍🗨️ code-review-action 👀
+<img src="https://github.com/user-attachments/assets/7e1493ad-31da-448d-8050-e2072c916500" alt="cute transparent robot" width="256">
 
 ## Reviews your Pushes to main branch and Pull Requests for 🆓 using latest Gemini Flash 2.5 5/20 Preview with previous feedback reevaluation on update ✨
 
