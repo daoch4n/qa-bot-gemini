@@ -353,7 +353,8 @@ class ReviewContext:
     def __init__(self, owner: str, repo_name_str: str, event_type: str, repo_obj=None,
                  pull_number: Optional[int] = None, pr_obj=None,
                  commit_sha: Optional[str] = None, commit_obj=None,
-                 title: Optional[str] = None, description: Optional[str] = None):
+                 title: Optional[str] = None, description: Optional[str] = None,
+                 commit_messages: Optional[List[str]] = None):
         self.owner = owner
         self.repo_name = repo_name_str
         self.event_type = event_type
@@ -364,6 +365,10 @@ class ReviewContext:
         self.commit_obj = commit_obj
         self.title = title
         self.description = description
+        self.commit_messages = commit_messages
+
+    def set_commit_messages(self, messages: List[str]):
+        self.commit_messages = messages
 
     def get_full_repo_name(self):
         return f"{self.owner}/{self.repo_name}"
@@ -738,9 +743,15 @@ IMPORTANT GUIDELINES:
 - Make comments actionable with specific suggestions for improvement. Include pseudocode examples when possible.
 - DO NOT comment on minor style issues or suggest adding comments to the code itself.
 - Carefully analyze the full file context (if provided) and PR context before making suggestions.
+- Use the provided concise commit summary (if available) to understand the overall purpose and scope of the changes.
 - Only suggest changes relevant to the diff. Do not comment on unrelated code unless directly impacted by the changes.
 - Be concise and clear in your feedback.
 - If no issues are found, return an empty reviews array.
+
+POSITIVE FEEDBACK GUIDELINES:
+- If you identify particularly elegant, efficient, or well-designed code, or significant positive improvements, you may provide positive feedback.
+- Start positive feedback comments with `[POSITIVE_FEEDBACK]` followed by your comment.
+- Example: `[POSITIVE_FEEDBACK] This new caching mechanism is well-implemented and significantly improves performance.`
 
 HANDLING PREVIOUS REVIEW COMMENTS:
 - If my previous review comments are provided, check if they've been addressed in the current code.
@@ -779,8 +790,22 @@ The response will be automatically structured according to the schema provided i
         context_header = f"\nPull Request Title: {review_context.title}\nPull Request Description:\n---\n"
         context_description = review_context.description or 'No description provided.'
     elif review_context.event_type == "push":
-        context_header = f"\nCommit Title: {review_context.title}\nCommit Message:\n---\n"
+        context_header = f"\nCommit Title: {review_context.title}\n"
         context_description = review_context.description or 'No commit message provided.'
+        if review_context.commit_messages:
+            # Generate concise summary of commit messages
+            commit_summary_lines = [msg.splitlines()[0] for msg in review_context.commit_messages if msg.strip()]
+            concise_commit_summary = "\n".join([f"- {line}" for line in commit_summary_lines[:10]])
+
+            if concise_commit_summary:
+                context_header += "Concise Commit Summary (first 10 messages):\n---\n"
+                context_description += f"\n{concise_commit_summary}\n"
+
+            context_header += "Full Commit History (most recent first):\n---\n"
+            # Join commit messages, ensuring each is on a new line and separated by a consistent marker
+            context_description += "\n" + "\n---\n".join(review_context.commit_messages) + "\n"
+        else:
+            context_header += "Commit Message:\n---\n"
     else: # issue_comment or other
         context_header = f"\nReview Context Title: {review_context.title}\nReview Context Description:\n---\n"
         context_description = review_context.description or 'No description provided.'
@@ -1281,15 +1306,20 @@ def save_review_results_to_json(review_context: ReviewContext, comments: List[Di
 
 def detect_severity(comment_text: str) -> str:
     """Heuristically detect the severity of a comment based on its content and confidence level."""
+    """Heuristically detect the severity of a comment based on its content and confidence level."""
     lower_text = comment_text.lower()
+
+    # Check for positive feedback first
+    if lower_text.startswith('[positive_feedback]'):
+        return "none" # Positive feedback has no "severity" in the traditional sense
 
     # Extract confidence level if present
     confidence = "medium"  # Default
-    if "**ai confidence: high**" in lower_text:
+    if "**my confidence: high**" in lower_text:
         confidence = "high"
-    elif "**ai confidence: medium**" in lower_text:
+    elif "**my confidence: medium**" in lower_text:
         confidence = "medium"
-    elif "**ai confidence: low**" in lower_text:
+    elif "**my confidence: low**" in lower_text:
         confidence = "low"
 
     # Check for critical severity indicators - highest priority runtime issues
@@ -1337,7 +1367,12 @@ def detect_severity(comment_text: str) -> str:
 
 def detect_category(comment_text: str) -> str:
     """Categorize review comments based on their content with improved focus on runtime issues."""
+    """Categorize review comments based on their content with improved focus on runtime issues."""
     lower_text = comment_text.lower()
+
+    # Check for positive feedback first
+    if lower_text.startswith('[positive_feedback]'):
+        return "positive_feedback"
 
     # Runtime behavior categories - highest priority
     if any(word in lower_text for word in [
@@ -1436,7 +1471,29 @@ def create_review_and_summary_comment(review_context: ReviewContext, comments_fo
         logger.error("No valid target object (PR or Commit) available for comments. Cannot create review or comments.")
         return
 
-    num_suggestions = len(comments_for_gh_review)
+    # Separate comments into issues and positive feedback
+    issue_comments = []
+    positive_feedback_comments = []
+
+    for c in comments_for_gh_review:
+        if "body" not in c:
+            continue
+
+        # Use the heuristic functions to determine category and severity
+        category = detect_category(c["body"])
+        severity = detect_severity(c["body"])
+
+        # Store detected category and severity for later use in summary
+        c["detected_category_heuristic"] = category
+        c["detected_severity_heuristic"] = severity
+
+        if category == "positive_feedback":
+            positive_feedback_comments.append(c)
+        else:
+            issue_comments.append(c)
+
+    num_issues = len(issue_comments)
+    num_positive_feedback = len(positive_feedback_comments)
 
     # Re-authenticate if necessary for posting comments
     # This block is similar to the one above, but for comment posting
@@ -1477,76 +1534,60 @@ def create_review_and_summary_comment(review_context: ReviewContext, comments_fo
         logger.warning("Falling back to original target object due to error.")
 
     # Process and post review comments
-    if num_suggestions > 0:
-        valid_review_comments = []
-        for c in comments_for_gh_review:
-            if all(k in c for k in ["body", "path", "position"]):
-                if isinstance(c["position"], int) and isinstance(c["path"], str) and isinstance(c["body"], str):
-                    valid_review_comments.append({
-                        "body": c["body"],
-                        "path": c["path"],
-                        "position": c["position"]
-                    })
-                else:
-                    logger.warning(f"Skipping malformed comment due to type mismatch: {c}")
+    valid_review_comments = []
+    for c in comments_for_gh_review: # Iterate over ALL comments for the review payload
+        if all(k in c for k in ["body", "path", "position"]):
+            if isinstance(c["position"], int) and isinstance(c["path"], str) and isinstance(c["body"], str):
+                valid_review_comments.append({
+                    "body": c["body"],
+                    "path": c["path"],
+                    "position": c["position"]
+                })
             else:
-                logger.warning(f"Skipping malformed comment due to missing keys: {c}")
+                logger.warning(f"Skipping malformed comment due to type mismatch: {c}")
+        else:
+            logger.warning(f"Skipping malformed comment due to missing keys: {c}")
 
-        if valid_review_comments:
-            if review_context.event_type == "pull_request" and review_context.pr_obj:
-                try:
-                    logger.info(f"Creating a PR review with {len(valid_review_comments)} suggestions.")
-                    target_obj.create_review(
-                        body="I've reviewed your code and have some suggestions:",
-                        event="COMMENT",
-                        comments=valid_review_comments
-                    )
-                    logger.info("Successfully created PR review with suggestions.")
-                except GithubException as e:
-                    logger.error("Error creating PR review: %s (Status: %s, Data: %s)", e, getattr(e, 'status', 'N/A'), getattr(e, 'data', 'N/A'), exc_info=True)
-                    logger.warning("Falling back to posting individual issue comments for suggestions.")
-                    for c_item in valid_review_comments:
-                        try:
-                            # For PRs, issue comments are tied to the PR number
-                            target_obj.create_issue_comment(f"I found an issue in **File:** `{c_item['path']}` (at diff position {c_item['position']})\n\n{c_item['body']}")
-                        except Exception as ie:
-                            logger.error("Error posting individual suggestion as issue comment: %s", ie, exc_info=True)
-                except Exception as e:
-                    logger.error("Unexpected error during PR review creation: %s", e, exc_info=True)
-                    traceback.print_exc()
-            elif review_context.event_type == "push" and review_context.commit_obj:
-                # For push events, comments are posted directly on the commit
-                logger.info(f"Creating {len(valid_review_comments)} comments on commit {review_context.commit_sha}.")
+    if valid_review_comments: # Check if there are any comments at all (issues or positive)
+        if review_context.event_type == "pull_request" and review_context.pr_obj:
+            try:
+                logger.info(f"Creating a PR review with {len(valid_review_comments)} suggestions (including positive feedback).")
+                target_obj.create_review(
+                    body="I've completed my code review and have some feedback:", # More neutral opening
+                    event="COMMENT",
+                    comments=valid_review_comments
+                )
+                logger.info("Successfully created PR review with suggestions.")
+            except GithubException as e:
+                logger.error("Error creating PR review: %s (Status: %s, Data: %s)", e, getattr(e, 'status', 'N/A'), getattr(e, 'data', 'N/A'), exc_info=True)
+                logger.warning("Falling back to posting individual issue comments for suggestions.")
                 for c_item in valid_review_comments:
                     try:
-                        # Commit comments require path, position, and commit_id
-                        # The 'position' here is the position in the diff, which needs to be calculated
-                        # relative to the target commit.
-                        # For now, we'll simplify and post as general commit comments if direct diff comment is complex.
-                        # GitHub API for commit comments: POST /repos/{owner}/{repo}/commits/{commit_sha}/comments
-                        # This requires `path` and `position` relative to the diff of that commit.
-                        # The `position` from our `improved_calculate_github_position` is for PR diffs.
-                        # For simplicity, we'll post general comments on the commit, or if we want file-specific,
-                        # we can try `create_comment` on the commit object.
-                        # The `position` parameter for `create_comment` on a commit refers to the line number in the *file*,
-                        # not the diff position. This is a key difference.
-                        # For now, let's post as a general comment on the commit, mentioning the file and diff position.
-                        target_obj.create_comment(
-                            body=f"I found an issue in **File:** `{c_item['path']}` (at diff position {c_item['position']})\n\n{c_item['body']}",
-                            path=c_item['path'], # Path relative to the repository root
-                            position=c_item['position'], # Line number in the file (not diff position)
-                            commit_id=review_context.commit_sha
-                        )
-                        logger.info(f"Posted comment on commit {review_context.commit_sha} for file {c_item['path']}.")
-                    except GithubException as e:
-                        logger.error("Error posting commit comment for %s: %s (Status: %s, Data: %s)", c_item['path'], e, getattr(e, 'status', 'N/A'), getattr(e, 'data', 'N/A'), exc_info=True)
-                    except Exception as e:
-                        logger.error("Unexpected error posting commit comment for %s: %s", c_item['path'], e, exc_info=True)
-                        traceback.print_exc()
-            else:
-                logger.warning("No validly structured comments to create a review with.")
-        else:
-            logger.info("No suggestions to create a review for.")
+                        # For PRs, issue comments are tied to the PR number
+                        target_obj.create_issue_comment(f"I found feedback in **File:** `{c_item['path']}` (at diff position {c_item['position']})\n\n{c_item['body']}")
+                    except Exception as ie:
+                        logger.error("Error posting individual suggestion as issue comment: %s", ie, exc_info=True)
+            except Exception as e:
+                logger.error("Unexpected error during PR review creation: %s", e, exc_info=True)
+                traceback.print_exc()
+        elif review_context.event_type == "push" and review_context.commit_obj:
+            logger.info(f"Creating {len(valid_review_comments)} comments on commit {review_context.commit_sha}.")
+            for c_item in valid_review_comments:
+                try:
+                    target_obj.create_comment(
+                        body=f"I found feedback in **File:** `{c_item['path']}` (at diff position {c_item['position']})\n\n{c_item['body']}",
+                        path=c_item['path'],
+                        position=c_item['position'],
+                        commit_id=review_context.commit_sha
+                    )
+                    logger.info(f"Posted comment on commit {review_context.commit_sha} for file {c_item['path']}.")
+                except GithubException as e:
+                    logger.error("Error posting commit comment for %s: %s (Status: %s, Data: %s)", c_item['path'], e, getattr(e, 'status', 'N/A'), getattr(e, 'data', 'N/A'), exc_info=True)
+                except Exception as e:
+                    logger.error("Unexpected error posting commit comment for %s: %s", c_item['path'], e, exc_info=True)
+                    traceback.print_exc()
+    else:
+        logger.info("No suggestions (issues or positive feedback) to create a review for.")
 
     # Prepare summary comment with links to review file
     repo_full_name = os.environ.get("GITHUB_REPOSITORY", review_context.get_full_repo_name())
@@ -1582,29 +1623,32 @@ def create_review_and_summary_comment(review_context: ReviewContext, comments_fo
 
     # Create summary body with categorized findings
     summary_body = f"✨ **I've completed my code review!** ✨\n\n"
-    if num_suggestions > 0:
-        # Group comments by category and severity for better organization
-        comments_by_category = {}
-        for c in comments_for_gh_review:
-            if "body" not in c:
-                continue
 
-            # Extract category and severity
-            category = detect_category(c["body"])
-            severity = detect_severity(c["body"])
+    if num_issues > 0:
+        summary_body += f"- I found {num_issues} potential areas for discussion/improvement (see my review comments above or in the review tab).\n"
+    if num_positive_feedback > 0:
+        summary_body += f"- I also identified {num_positive_feedback} instances of positive feedback.\n"
 
-            if category not in comments_by_category:
-                comments_by_category[category] = {"high": 0, "medium": 0, "low": 0, "critical": 0}
+    if num_issues == 0 and num_positive_feedback == 0:
+        summary_body += "- I didn't find any specific issues or positive feedback in this code review pass.\n"
 
-            if severity in comments_by_category[category]:
-                comments_by_category[category][severity] += 1
+    summary_body += f"- {review_file_url_md}.\n\n"
 
-        # Add summary of findings by category
-        summary_body += f"- I found {num_suggestions} potential areas for discussion/improvement (see my review comments above or in the review tab).\n"
-        summary_body += f"- {review_file_url_md}.\n\n"
-
+    if num_issues > 0:
         summary_body += "### Summary of My Findings by Category:\n"
-        for category, severities in sorted(comments_by_category.items()):
+        # Group issue comments by category and severity
+        issue_comments_by_category = {}
+        for c in issue_comments:
+            category = c["detected_category_heuristic"]
+            severity = c["detected_severity_heuristic"]
+
+            if category not in issue_comments_by_category:
+                issue_comments_by_category[category] = {"high": 0, "medium": 0, "low": 0, "critical": 0}
+
+            if severity in issue_comments_by_category[category]:
+                issue_comments_by_category[category][severity] += 1
+
+        for category, severities in sorted(issue_comments_by_category.items()):
             total = sum(severities.values())
             if total == 0:
                 continue
@@ -1622,9 +1666,24 @@ def create_review_and_summary_comment(review_context: ReviewContext, comments_fo
 
             severity_text = ", ".join(severity_parts)
             summary_body += f"- **{category}**: {total} issues ({severity_text})\n"
-    else:
-        summary_body += "- I didn't find any specific issues in this code review pass.\n"
 
+    if num_positive_feedback > 0:
+        summary_body += "\n### Summary of Positive Feedback:\n"
+        # Group positive feedback comments by file for a concise list
+        positive_feedback_by_file = {}
+        for c in positive_feedback_comments:
+            file_path = c["path"]
+            # Remove the [POSITIVE_FEEDBACK] prefix for display
+            clean_comment = c["body"].replace('[POSITIVE_FEEDBACK]', '').strip()
+            if file_path not in positive_feedback_by_file:
+                positive_feedback_by_file[file_path] = []
+            positive_feedback_by_file[file_path].append(clean_comment)
+
+        for file_path, comments in sorted(positive_feedback_by_file.items()):
+            summary_body += f"- **File**: `{file_path}`\n"
+            for comment in comments:
+                summary_body += f"  - {comment}\n"
+    
     # Add review information
     summary_body += f"\n### About My Review\n"
     summary_body += f"- I used model: `{os.environ.get('GEMINI_MODEL', 'N/A')}`\n"
@@ -1643,7 +1702,7 @@ def create_review_and_summary_comment(review_context: ReviewContext, comments_fo
             fallback_key_note = "- **Note:** I encountered rate limiting with the primary API key, but I was able to use the fallback key successfully.\n"
 
         # Add warning only if ALL keys were rate limited and got no results
-        if gemini_key_manager.all_keys_rate_limited and num_suggestions == 0:
+        if gemini_key_manager.all_keys_rate_limited and (num_issues + num_positive_feedback) == 0:
             rate_limit_warning = "\n\n⚠️ **Warning: I encountered rate limiting with ALL my API keys during this review.** My review may be incomplete or missing suggestions due to API quota limitations."
 
     summary_body += f"- My review focused on: Logic flaws, runtime behavior issues, and code quality\n"
@@ -1764,37 +1823,60 @@ def main():
             diff_text = get_diff(review_context, comparison_sha_for_diff)
 
         elif review_context.event_type == "push":
-            head_sha = review_context.commit_sha
+            head_sha = os.environ.get("GITHUB_SHA")
             commit_review_filepath = "reviews/gemini-commit-review.json"
-            last_reviewed_commit_sha = None
+            last_reviewed_commit_sha = os.environ.get("LAST_REVIEWED_SHA") # Get from env var
 
-            # Attempt to load last reviewed commit SHA from the review file
-            previous_commit_review_data = load_previous_review_data(filepath_str=commit_review_filepath)
-            if previous_commit_review_data and "metadata" in previous_commit_review_data and \
-               "commit_sha" in previous_commit_review_data["metadata"]:
-                last_reviewed_commit_sha = previous_commit_review_data["metadata"]["commit_sha"]
-                logger.info(f"Last reviewed commit SHA from {commit_review_filepath}: {last_reviewed_commit_sha}")
+            if not last_reviewed_commit_sha:
+                # Fallback to loading from file if env var not set (e.g., first run)
+                previous_commit_review_data = load_previous_review_data(filepath_str=commit_review_filepath)
+                if previous_commit_review_data and "metadata" in previous_commit_review_data and \
+                   "commit_sha" in previous_commit_review_data["metadata"]:
+                    last_reviewed_commit_sha = previous_commit_review_data["metadata"]["commit_sha"]
+                    logger.info(f"Last reviewed commit SHA from {commit_review_filepath} (file): {last_reviewed_commit_sha}")
+                else:
+                    logger.info("No LAST_REVIEWED_SHA environment variable or previous review file found.")
 
+            # Determine comparison_sha_for_diff
+            comparison_sha_for_diff = None
             if last_reviewed_commit_sha and last_reviewed_commit_sha != head_sha:
                 comparison_sha_for_diff = last_reviewed_commit_sha
-                logger.info(f"Event type is 'push'. Reviewing new commits from {last_reviewed_commit_sha} to {head_sha}.")
-                diff_text = get_diff(review_context, comparison_sha_for_diff)
+                logger.info(f"Push event: Comparing from LAST_REVIEWED_SHA ({last_reviewed_commit_sha}) to CURRENT_SHA ({head_sha}).")
             elif review_context.commit_obj and review_context.commit_obj.parents:
                 comparison_sha_for_diff = review_context.commit_obj.parents[0].sha
-                logger.info(f"Event type is 'push'. No previous commit SHA or same as head. Reviewing commit {head_sha} against parent {comparison_sha_for_diff}.")
-                diff_text = get_diff(review_context, comparison_sha_for_diff)
+                logger.info(f"Push event: No LAST_REVIEWED_SHA or same as CURRENT_SHA. Comparing current commit ({head_sha}) against its parent ({comparison_sha_for_diff}).")
             else:
-                logger.warning(f"Push event for commit {head_sha} has no parent and no previous commit SHA to compare against. No diff to review.")
+                logger.warning(f"Push event for commit {head_sha} has no parent and no LAST_REVIEWED_SHA to compare against. No diff to review.")
                 save_review_results_to_json(review_context, [], commit_review_filepath)
                 create_review_and_summary_comment(review_context, [], commit_review_filepath)
                 return
 
-            # If diff_text is still empty after trying all comparisons, exit
-            if not diff_text:
-                logger.warning("No diff content retrieved for push event. Exiting review process.")
+            if head_sha == comparison_sha_for_diff:
+                logger.info(f"HEAD SHA ({head_sha}) is the same as comparison SHA ({comparison_sha_for_diff}). No new changes to diff.")
                 save_review_results_to_json(review_context, [], commit_review_filepath)
                 create_review_and_summary_comment(review_context, [], commit_review_filepath)
+                logger.info("Exiting as there are no new changes to review based on SHAs.")
                 return
+
+            # Fetch diff
+            diff_text = get_diff(review_context, comparison_sha_for_diff)
+
+            # Fetch commit messages for the range
+            commit_messages_list = []
+            if comparison_sha_for_diff and head_sha and review_context.repo_obj:
+                try:
+                    # GitHub's compare API returns commits that are unique to the 'head' branch
+                    # compared to the 'base' branch. This will give all commits in the range.
+                    comparison = review_context.repo_obj.compare(comparison_sha_for_diff, head_sha)
+                    for commit in comparison.commits:
+                        commit_messages_list.append(commit.commit.message)
+                    logger.info(f"Fetched {len(commit_messages_list)} commit messages between {comparison_sha_for_diff} and {head_sha}.")
+                except GithubException as e:
+                    logger.warning(f"Could not fetch commit messages for push event (compare {comparison_sha_for_diff}..{head_sha}): {e}")
+                except Exception as e:
+                    logger.error(f"Unexpected error fetching commit messages for push event: {e}")
+
+            review_context.set_commit_messages(commit_messages_list)
 
         elif review_context.event_type == "issue_comment":
             # For issue_comment events, we assume it's on a PR and re-review the PR
