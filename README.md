@@ -1,4 +1,4 @@
-# 👁️‍🗨️ code-review-action 👀
+# 👁️‍🗨️ zen-ai-qa 👀
 <img src="https://github.com/user-attachments/assets/7e1493ad-31da-448d-8050-e2072c916500" alt="cute transparent robot" width="256">
 
 ## Reviews your Pushes to main branch and Pull Requests for 🆓 using latest Gemini Flash 2.5 5/20 Preview with previous feedback reevaluation on update ✨
@@ -32,4 +32,4 @@ Differences:
 - Auto-commits AI-actionable JSON report <br> as cute white robot to your repo `/reviews/` folder <br> for futher agentic processing
 - Uses JSON file in question during next run <br> to load previous comments from last run <br> for better context
 - Loads API key from Github Actions secrets in JSON format: [ key ]
-- Compliance with Provider Terms: Users of qa-gemini-action are solely responsible for ensuring that their use of this tool complies with the terms of service, usage policies, and any other relevant agreements of the AI service providers
+ Compliance with Provider Terms: Users of zen-ai-qa are solely responsible for ensuring that their use of this tool complies with the terms of service, usage policies, and any other relevant agreements
