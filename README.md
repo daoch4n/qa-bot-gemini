@@ -2,6 +2,8 @@
 
 ### Run AI Code Review on pushes to main branch and Pull Requests using Gemini Flash 2.5 model with previous feedback reevaluation ✨
 
+### [⬇️ Skip to Readme](#readme)
+
 ![image](https://github.com/user-attachments/assets/a3c2b16f-7339-4b25-bb14-ccb291b2fcc0)
 
 ## Features
@@ -17,7 +19,7 @@
 
 ![image](https://github.com/user-attachments/assets/64436b3d-4166-4ae5-be0e-6320088981c4)
 
-## Usage
+## Readme
 - Put `.py` and `.yml` files in `.github/workflows/` folder of your repo
 - Go to [AI Studio](https://aistudio.google.com/apikey) and obtain Gemini API key there
 - From repo page on Github go to `Settings` -> `Secrets and variables` -> `Actions`
