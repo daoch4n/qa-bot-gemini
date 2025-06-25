@@ -36,5 +36,6 @@
     - Set `ZEN_APP_INSTALLATION_ID` with the installation ID <br> you can find installation ID in url of app settings page (the one that displays after you install app on your account or org, not the one where you generate private key)
     - Set `ZEN_APP_PRIVATE_KEY` with your app private key generated in [app settings](https://github.com/settings/apps/)
     - Replace hardcoded App ID in `.py` file with your own app ID <!-- TODO: Refactor script to load App ID from Actions Secrets  -->
+<br><br>
 Inspired by [truongnh1992/gemini-ai-code-reviewer](https://github.com/truongnh1992/gemini-ai-code-reviewer)
 
