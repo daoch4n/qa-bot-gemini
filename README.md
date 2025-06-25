@@ -24,8 +24,8 @@
 Inspired by [truongnh1992/gemini-ai-code-reviewer](https://github.com/truongnh1992/gemini-ai-code-reviewer)
 <br><br>
 Differences:
-- Talks to you as your custom [bot] <br> or as github-actions[bot] if you didn't set it up
 - Automatically runs <br> on pushes to main branch and Pull Requests (creation, update , reopen)
+- Talks to you as your custom [bot] <br> or as github-actions[bot] if you didn't set it up
 - Batches hunks related to same files <br> to optimize rate limiting
 - Makes use of Gemini 1 million tokens context window <br> by attaching whole file together with changes for better context
 - Optimized diff parsing algoritm <br> that works better with GitHub (maybe?)
