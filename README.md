@@ -24,11 +24,10 @@ Inspired by [truongnh1992/gemini-ai-code-reviewer](https://github.com/truongnh19
 <br><br>
 Differences:
 - Talks to you as cute white robot <br> (if you set it up)
-- Automatically runs on PR creation, update , reopen
+- Automatically runs <br> on pushes to main branch and Pull Requests (creation, update , reopen)
 - Batches hunks related to same files <br> to optimize rate limiting
 - Makes use of Gemini 1 million tokens context window <br> by attaching whole file together with changes for better context
 - Optimized diff parsing algoritm <br> that works better with GitHub (maybe?)
 - Uses Structured Output mode of Gemini API <br> for better parsing of AI output
-- Auto-commits AI-actionable JSON report <br> as cute white robot to your repo `/reviews/` folder <br> for futher agentic processing
-- Uses JSON file in question during next run <br> to load previous comments from last run <br> for better context
-- Loads API key from Github Actions secrets in JSON format: [ key ]
+- Auto-commits AI-actionable JSON report <br> to your repo `/reviews/` folder for futher agentic processing
+- Uses JSON file in question during next run <br> for better context and logical consistency
