@@ -32,3 +32,4 @@ Differences:
 - Uses Structured Output mode of Gemini API <br> for better parsing of AI output
 - Auto-commits AI-actionable JSON report <br> to your repo `/reviews/` folder for futher agentic processing
 - Uses JSON file in question during next run <br> for better context and logical consistency
+- Compares actual changes to commit titles <br> on pushes to main branch only
