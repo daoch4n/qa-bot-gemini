@@ -1706,7 +1706,6 @@ def create_review_and_summary_comment(review_context: ReviewContext, comments_fo
             rate_limit_warning = "\n\n⚠️ **Warning: I encountered rate limiting with ALL my API keys during this review.** My review may be incomplete or missing suggestions due to API quota limitations."
 
     summary_body += f"- My review focused on: Logic flaws, runtime behavior issues, and code quality\n"
-    summary_body += f"- To mark my comments as resolved: Add `[ADDRESSED]` to the comment in the JSON file, followed by `**Resolution**: your explanation`\n"
 
     # Add rate limit warning if applicable
     summary_body += rate_limit_warning
