@@ -32,4 +32,3 @@ Differences:
 - Auto-commits AI-actionable JSON report <br> as cute white robot to your repo `/reviews/` folder <br> for futher agentic processing
 - Uses JSON file in question during next run <br> to load previous comments from last run <br> for better context
 - Loads API key from Github Actions secrets in JSON format: [ key ]
- Compliance with Provider Terms: Users of zen-ai-qa are solely responsible for ensuring that their use of this tool complies with the terms of service, usage policies, and any other relevant agreements
