@@ -26,10 +26,10 @@ Inspired by [truongnh1992/gemini-ai-code-reviewer](https://github.com/truongnh19
 Differences:
 - Automatically runs <br> on pushes to main branch and Pull Requests (creation, update , reopen)
 - Talks to you as your custom [bot] <br> or as github-actions[bot] if you didn't set it up
+- Auto-commits AI-actionable JSON report as your custom [bot] <br> or as zen-ai-dev[bot] if you didn't set it up <br> to your repo `/reviews/` folder for futher agentic processing
+- Uses JSON file in question during next run <br> for better context and logical consistency
 - Batches hunks related to same files <br> to optimize rate limiting
 - Makes use of Gemini 1 million tokens context window <br> by attaching whole file together with changes for better context
 - Optimized diff parsing algoritm <br> that works better with GitHub (maybe?)
 - Uses Structured Output mode of Gemini API <br> for better parsing of AI output
-- Auto-commits AI-actionable JSON report <br> to your repo `/reviews/` folder for futher agentic processing
-- Uses JSON file in question during next run <br> for better context and logical consistency
 - Compares actual changes to commit titles <br> on pushes to main branch only
