@@ -4,7 +4,20 @@
 
 ![image](https://github.com/user-attachments/assets/a3c2b16f-7339-4b25-bb14-ccb291b2fcc0)
 
-### Usage:
+## Features
+- Automatically runs <br> on pushes to main branch and Pull Requests (creation, update , reopen)
+- Talks to you as your custom [bot] <br> or as github-actions[bot] if you didn't set it up
+- Auto-commits AI-actionable JSON report as your custom [bot] <br> to your repo `/reviews/` folder for futher agentic processing <br> or as zen-ai-dev[bot] if you didn't set it up
+- Uses JSON file in question during next run <br> for better context and logical consistency
+- Batches hunks related to same files <br> to optimize rate limiting
+- Makes use of Gemini 1 million tokens context window <br> by attaching whole file together with changes for better context
+- Optimized diff parsing algoritm <br> that works better with GitHub (maybe?)
+- Uses Structured Output mode of Gemini API <br> for better parsing of AI output
+- Compares actual changes to commit titles <br> on pushes to main branch only
+
+![image](https://github.com/user-attachments/assets/64436b3d-4166-4ae5-be0e-6320088981c4)
+
+## Usage
 - Put `.py` and `.yml` files in `.github/workflows/` folder of your repo
 - Go to [AI Studio](https://aistudio.google.com/apikey) and obtain Gemini API key there
 - From repo page on Github go to `Settings` -> `Secrets and variables` -> `Actions`
@@ -22,14 +35,4 @@
     - Set `ZEN_APP_PRIVATE_KEY` with your app private key generated in [app settings](https://github.com/settings/apps/)
 
 Inspired by [truongnh1992/gemini-ai-code-reviewer](https://github.com/truongnh1992/gemini-ai-code-reviewer)
-<br><br>
-Differences:
-- Automatically runs <br> on pushes to main branch and Pull Requests (creation, update , reopen)
-- Talks to you as your custom [bot] <br> or as github-actions[bot] if you didn't set it up
-- Auto-commits AI-actionable JSON report as your custom [bot] <br> to your repo `/reviews/` folder for futher agentic processing <br> or as zen-ai-dev[bot] if you didn't set it up
-- Uses JSON file in question during next run <br> for better context and logical consistency
-- Batches hunks related to same files <br> to optimize rate limiting
-- Makes use of Gemini 1 million tokens context window <br> by attaching whole file together with changes for better context
-- Optimized diff parsing algoritm <br> that works better with GitHub (maybe?)
-- Uses Structured Output mode of Gemini API <br> for better parsing of AI output
-- Compares actual changes to commit titles <br> on pushes to main branch only
+
