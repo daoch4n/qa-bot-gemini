@@ -1,6 +1,6 @@
 # 👁️‍🗨️ zen-ai-qa[bot] 👀
 
-![image](https://github.com/user-attachments/assets/a2b27b2c-0489-47da-9feb-9cd19b30959c)
+![image](https://github.com/user-attachments/assets/a3c2b16f-7339-4b25-bb14-ccb291b2fcc0)
 
 ## Run Code Review on pushes to main branch and Pull Requests using Gemini Flash 2.5 AI model with previous feedback reevaluation ✨
 
