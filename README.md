@@ -13,7 +13,7 @@
     - Secret: the API key you just got from [AI Studio](https://aistudio.google.com/apikey) in JSON format: [ key ]
 - It will automatically run on pushes to main branch and pull request creation , update and reopen
 - For pushes to main branch, detailed review feedback since last push will be auto-commited to your repo `/reviews/` folder (separate from PR feedback)
-- For Pull Requests, detailed review feedback will be commented by your custom [bot] on completion <br> along with AI-actionable JSON report (in two formats) <br> auto-commited by your custom [bot] to your repo `/reviews/` folder (separate from main branch commits feedback)
+- For Pull Requests, detailed review feedback will be commented by your custom [bot] on completion <br> auto-commited to same folder (separate from main branch commits feedback)
 ### (Optional) <br> If you also want it to comment as your custom bot:
 - Make you own app in Developer settings and use its installation ID and key! 🗝️
 - From repo page on Github go to `Settings` -> `Secrets and variables` -> `Actions`
