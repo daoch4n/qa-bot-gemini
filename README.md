@@ -1,7 +1,7 @@
 # 👁️‍🗨️ zen-ai-qa 👀
 <img src="https://github.com/user-attachments/assets/7e1493ad-31da-448d-8050-e2072c916500" alt="cute transparent robot" width="256">
 
-## Run Code Review on pushes to main branch and Pull Requests using Gemini Flash 2.5 AI model with previous feedback reevaluation on rerun ✨
+## Run Code Review on pushes to main branch and Pull Requests using Gemini Flash 2.5 AI model with previous feedback reevaluation ✨
 
 ### Usage:
 - Put `.py` and `.yml` files in `.github/workflows/` folder of your repo
