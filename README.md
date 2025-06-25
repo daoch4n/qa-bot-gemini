@@ -9,7 +9,7 @@
 ## Features
 - Automatically runs <br> on pushes to main branch and Pull Requests (creation, update , reopen)
 - Talks to you as your custom [bot] <br> or as github-actions[bot] if you didn't set it up
-- Auto-commits AI-actionable JSON report as your custom [bot] <br> to your repo `/reviews/` folder for futher agentic processing <br> or as zen-ai-dev[bot] if you didn't set it up
+- Auto-commits AI-actionable JSON report as your custom [bot] <br> to your repo `/reviews/` folder for futher agentic processing <br> or as zen-ai-dev[bot] if you didn't update the hardcoded git settings in `.yml` files
 - Uses JSON file in question during next run <br> for better context and logical consistency
 - Batches hunks related to same files <br> to optimize rate limiting
 - Makes use of Gemini 1 million tokens context window <br> by attaching whole file together with changes for better context
