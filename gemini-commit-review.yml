@@ -1,4 +1,4 @@
-name: AI Commit Review
+name: AI code review
 
 on:
   push:
@@ -195,7 +195,8 @@ jobs:
                 sleep $sleep_time
               else
                 echo "All attempts for code review script failed."
-                echo "Continuing workflow despite script failure after retries to commit artifacts."
+                echo "All attempts for code review script failed. Exiting with failure."
+                exit 1 # Fail the step if all attempts fail
               fi
             fi
             attempt=$((attempt + 1))
@@ -232,11 +233,11 @@ jobs:
             # For commit reviews, simplify the commit message
             issue_count_val="${{ steps.get_issue_count.outputs.issue_count }}"
             if [ "$issue_count_val" -eq 0 ]; then
-              commit_message="✅ No issues found since last push"
+              commit_message="☑️ AI Code Review left no comments since last push"
             elif [ "$issue_count_val" -eq 1 ]; then
-              commit_message="ℹ️ Review left 1 comment since last push"
+              commit_message="ℹ️ AI Code Review left 1 comment since last push"
             else
-              commit_message="ℹ️ Review left $issue_count_val comments since last push"
+              commit_message="ℹ️ AI Code Review left $issue_count_val comments since last push"
             fi
             echo "Generated commit message: $commit_message"
 
