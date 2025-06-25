@@ -1,4 +1,4 @@
-name: AI Code Review
+name: AI pull request review
 
 on:
   pull_request:
@@ -207,15 +207,15 @@ jobs:
 
               if [ "$review_comments_count" -gt 0 ]; then
                 if [ "$rate_limited" = "true" ]; then
-                  commit_message="ℹ️ Gemini PR review left $review_comments_count comments (rate limited)"
+                  commit_message="ℹ️ AI Pull Request Review left $review_comments_count comments (rate limited)"
                 else
-                  commit_message="ℹ️ Gemini PR review left $review_comments_count comments"
+                  commit_message="ℹ️ AI Pull Request Review left $review_comments_count comments"
                 fi
               else
                 if [ "$rate_limited" = "true" ]; then
-                  commit_message="ℹ️ Gemini PR review left no comments (rate limited)"
+                  commit_message="ℹ️ AI Pull Request Review left no comments (rate limited)"
                 else
-                  commit_message="ℹ️ Gemini PR review left no comments"
+                  commit_message="ℹ️ AI Pull Request Review left no comments"
                 fi
               fi
             else
