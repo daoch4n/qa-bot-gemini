@@ -22,7 +22,7 @@
 ## Readme
 - Put `.py` and `.yml` files in `.github/workflows/` folder of your repo
 - Go to [AI Studio](https://aistudio.google.com/apikey) and obtain Gemini API key there
-- From repo page on Github go to `Settings` -> `Secrets and variables` -> `Actions`
+- On the repo page where you want to run this bot <br> Go to `Settings` -> `Secrets and variables` -> `Actions`
   - Click `New repository secret`
     - Name: `GEMINI_API_KEY`
     - Secret: the API key you just got from [AI Studio](https://aistudio.google.com/apikey) in JSON format: [ key ]
