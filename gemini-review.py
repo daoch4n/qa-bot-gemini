@@ -430,11 +430,10 @@ def get_review_context() -> ReviewContext:
             logger.error("An unexpected error occurred while fetching commit details: %s", e, exc_info=True)
             sys.exit(1)
 
-        commit_message = commit_obj.commit.message if commit_obj and commit_obj.commit else ""
         logger.info(f"Detected event type: push. Commit SHA: {commit_sha}")
         return ReviewContext(owner, repo_name_str, "push", repo_obj,
                              commit_sha=commit_sha, commit_obj=commit_obj,
-                             title=f"Commit: {commit_message.splitlines()[0] if commit_message.strip() else 'No Commit Title'}", description=commit_message)
+                             title=f"Commit: {commit_sha[:7]}", description="")
 
     elif event_name == "issue_comment":
         if "issue" in event_data and "pull_request" in event_data["issue"]:
@@ -792,20 +791,7 @@ The response will be automatically structured according to the schema provided i
     elif review_context.event_type == "push":
         context_header = f"\nCommit Title: {review_context.title}\n"
         context_description = review_context.description or 'No commit message provided.'
-        if review_context.commit_messages:
-            # Generate concise summary of commit messages
-            commit_summary_lines = [msg.splitlines()[0] for msg in review_context.commit_messages if msg.strip()]
-            concise_commit_summary = "\n".join([f"- {line}" for line in commit_summary_lines[:10]])
-
-            if concise_commit_summary:
-                context_header += "Concise Commit Summary (first 10 messages):\n---\n"
-                context_description += f"\n{concise_commit_summary}\n"
-
-            context_header += "Full Commit History (most recent first):\n---\n"
-            # Join commit messages, ensuring each is on a new line and separated by a consistent marker
-            context_description += "\n" + "\n---\n".join(review_context.commit_messages) + "\n"
-        else:
-            context_header += "Commit Message:\n---\n"
+        context_header += "Commit Message:\n---\n"
     else: # issue_comment or other
         context_header = f"\nReview Context Title: {review_context.title}\nReview Context Description:\n---\n"
         context_description = review_context.description or 'No description provided.'
