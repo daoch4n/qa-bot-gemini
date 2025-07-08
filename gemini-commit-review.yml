@@ -31,8 +31,31 @@ jobs:
         with:
           fetch-depth: 0 # Needed for diffing against base SHA (if comparing to a previous state)
 
+      - name: 🧹 Handle Merged PR
+        id: handle_merged_pr
+        run: |
+          if [ -f "reviews/gemini-pr-review.json" ]; then
+            echo "PR review artifact found, indicating a merge. Resetting review state."
+            rm "reviews/gemini-pr-review.json"
+            if [ -f "reviews/gemini-commit-review.json" ]; then
+              jq --arg sha "${{ github.sha }}" '.metadata.commit_sha = $sha | .review_comments = []' reviews/gemini-commit-review.json > reviews/gemini-commit-review.json.tmp && mv reviews/gemini-commit-review.json.tmp reviews/gemini-commit-review.json
+              echo "Updated commit review artifact."
+            fi
+            git config --global user.name 'zen-ai-qa[bot]'
+            git config --global user.email '211895442+zen-ai-qa[bot]@users.noreply.github.com'
+            git add reviews/gemini-pr-review.json reviews/gemini-commit-review.json
+            git commit -m "chore: reset review artifacts after merge"
+            git pull --rebase
+            git push
+            echo "completed=true" >> $GITHUB_OUTPUT
+          else
+            echo "No PR review artifact found. Proceeding with commit review."
+            echo "completed=false" >> $GITHUB_OUTPUT
+          fi
+
       - name: 🔍 Extract Last Reviewed SHA
         id: extract_sha
+        if: steps.handle_merged_pr.outputs.completed != 'true'
         run: |
           if [ -f "reviews/gemini-commit-review.json" ]; then
             LAST_REVIEWED_SHA=$(jq -r '.metadata.commit_sha' reviews/gemini-commit-review.json)
@@ -44,6 +67,7 @@ jobs:
           fi
 
       - name: Set up Python and Install Dependencies
+        if: steps.handle_merged_pr.outputs.completed != 'true'
         uses: actions/setup-python@v5
         with:
           python-version: '3.10'
@@ -51,6 +75,7 @@ jobs:
           pip install flake8 google-generativeai PyGithub unidiff "google-ai-generativelanguage>=0.6.0" github3.py requests PyJWT cryptography
 
       - name: 🐍 Python Syntax Check
+        if: steps.handle_merged_pr.outputs.completed != 'true'
         run: |
           echo "Running Python validation on .github/ and other specified .py files..."
           set -e
@@ -117,6 +142,7 @@ jobs:
 
       - name: 🔑 Prepare API
         id: prepare_api
+        if: steps.handle_merged_pr.outputs.completed != 'true'
         env:
           GEMINI_API_KEY_SECRET: ${{ secrets.GEMINI_API_KEY }}
         run: |
@@ -158,6 +184,7 @@ jobs:
           echo "gemini_fallback_key=${SELECTED_KEYS[1]}" >> $GITHUB_OUTPUT
 
       - name: 🧠 Run code review
+        if: steps.handle_merged_pr.outputs.completed != 'true'
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
           GEMINI_API_KEY: ${{ steps.prepare_api.outputs.gemini_main_key }}
@@ -204,6 +231,7 @@ jobs:
 
       - name: 🔢 Get Issue Count
         id: get_issue_count
+        if: steps.handle_merged_pr.outputs.completed != 'true'
         run: |
           # Ensure jq is installed (it usually is on ubuntu-latest)
           if ! command -v jq &> /dev/null; then
@@ -216,7 +244,15 @@ jobs:
           echo "Detected $issue_count issues."
           echo "issue_count=$issue_count" >> $GITHUB_OUTPUT
 
+      - name: Add trailing newline to review JSON
+        if: steps.handle_merged_pr.outputs.completed != 'true'
+        run: |
+          if [ -f reviews/gemini-commit-review.json ]; then
+            echo "" >> reviews/gemini-commit-review.json
+          fi
+
       - name: Commit review artifacts (review JSON)
+        if: steps.handle_merged_pr.outputs.completed != 'true'
         run: |
           export GIT_AUTHOR_NAME="zen-ai-qa[bot]"
           export GIT_AUTHOR_EMAIL="211895442+zen-ai-qa[bot]@users.noreply.github.com"
