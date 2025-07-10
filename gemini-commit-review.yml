@@ -269,11 +269,11 @@ jobs:
             # For commit reviews, simplify the commit message
             issue_count_val="${{ steps.get_issue_count.outputs.issue_count }}"
             if [ "$issue_count_val" -eq 0 ]; then
-              commit_message="☑️ AI Code Review left no comments since last push"
+              commit_message="🆕 review: LGTM"
             elif [ "$issue_count_val" -eq 1 ]; then
-              commit_message="ℹ️ AI Code Review left 1 comment since last push"
+              commit_message="🆕 review: 1 comment"
             else
-              commit_message="ℹ️ AI Code Review left $issue_count_val comments since last push"
+              commit_message="🆕 review: $issue_count_val comments"
             fi
             echo "Generated commit message: $commit_message"
 
